@@ -1,0 +1,15 @@
+# ─── ປິດຂໍ້ມູນລັບຂອງ Server ──────────────────
+server/.env
+server/node_modules/
+server/logs/
+
+# ─── ປິດໄຟລ໌ທີ່ສ້າງຈາກການ Build ຂອງ Flutter ───
+sabaidee_wallet/.dart_tool/
+sabaidee_wallet/build/
+sabaidee_wallet/.flutter-plugins
+sabaidee_wallet/.flutter-plugins-dependencies
+
+# ─── ໄຟລ໌ລະບົບ ແລະ IDE ──────────────────────
+.DS_Store
+.vscode/
+.idea/
