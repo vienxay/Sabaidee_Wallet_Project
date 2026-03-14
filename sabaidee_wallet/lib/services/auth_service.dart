@@ -10,26 +10,28 @@ class AuthService {
 
   final _api = ApiClient.instance;
 
-  // ─── Register (ແກ້ໄຂແລ້ວ) ──────────────────────────────────────────────────────────────
+  // ─── Register ──────────────────────────────────────────────────────────────
   Future<AuthResult> register({
-    required String name,
+    required String walletName, // ✅ ປ່ຽນຈາກ name → walletName ໃຫ້ຊັດເຈນ
     required String email,
     required String password,
   }) async {
     final res = await _api.post(AppConstants.authRegister, {
-      'walletName': name,
+      'walletName': walletName,
       'email': email,
       'password': password,
     }, auth: false);
 
     if (res.success && res.data != null) {
-      await _saveSession(res.data!);
+      // ✅ Register ສຳເລັດ → ບໍ່ຕ້ອງ Save Session ຍ້ອນ Navigate ໄປ /login ຢູ່ດີ
+      // await _saveSession(res.data!); ← ລຶບອອກ
       return AuthResult.success(UserModel.fromJson(res.data!['user']));
     }
 
-    // 🔥 ຈຸດທີ່ແກ້ໄຂ: ປ່ຽນຈາກ return ເປັນ throw
-    // ເພື່ອໃຫ້ try-catch ໃນ RegisterScreen ກວດຈັບ Error ນີ້ໄດ້
-    throw res.message;
+    // ✅ ແກ້ຫຼັກ: Throw Exception ບໍ່ແມ່ນ String
+    throw Exception(
+      res.message.isNotEmpty ? res.message : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່',
+    );
   }
 
   // ─── Login ─────────────────────────────────────────────────────────────────
@@ -46,7 +48,38 @@ class AuthService {
       await _saveSession(res.data!);
       return AuthResult.success(UserModel.fromJson(res.data!['user']));
     }
-    return AuthResult.failure(res.message);
+
+    // ✅ ສອດຄ່ອງກັນ: Login ກໍ Throw ເໝືອນກັນ
+    throw Exception(
+      res.message.isNotEmpty ? res.message : 'ອີເມວ ຫຼື ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ',
+    );
+  }
+
+  // ─── isLoggedIn ─────────────────────────────────────────────────────────────
+  Future<bool> isLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(AppConstants.tokenKey);
+    if (token == null) return false;
+
+    // ✅ ກວດ JWT Expiry ໂດຍບໍ່ຕ້ອງ Call API
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return false;
+
+      // Decode Payload (Base64)
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+
+      final exp = payload['exp'] as int?;
+      if (exp == null) return false;
+
+      // ✅ ກວດວ່າ Token ຍັງບໍ່ໝົດອາຍຸ
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      return DateTime.now().isBefore(expiry);
+    } catch (_) {
+      return false; // Token ຮູບແບບຜິດ → ຖືວ່າ Logged Out
+    }
   }
 
   // ─── Get Me ────────────────────────────────────────────────────────────────
@@ -100,12 +133,6 @@ class AuthService {
       'newPassword': newPassword,
     }, auth: false);
     return ServiceResult(success: res.success, message: res.message);
-  }
-
-  // ─── Token Check ───────────────────────────────────────────────────────────
-  Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(AppConstants.tokenKey) != null;
   }
 
   // ─── Save Session ──────────────────────────────────────────────────────────

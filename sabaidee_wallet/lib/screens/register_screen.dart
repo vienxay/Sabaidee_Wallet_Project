@@ -34,28 +34,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. ເອີ້ນໃຊ້ Service
+      // ✅ ແກ້: ສົ່ງ walletName ໃຫ້ກົງກັບ Backend
       await AuthService.instance.register(
-        name: _nameCtrl.text.trim(),
+        walletName: _nameCtrl.text.trim(), // ← ປ່ຽນຈາກ name → walletName
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
 
-      // 2. ຖ້າ Code ແລ່ນມາຮອດບັນທັດນີ້ ແປວ່າ Backend ຕອບ 201 (Success)
       if (!mounted) return;
       _showSnack('ສະໝັກສະມາຊິກ ແລະ ສ້າງ Wallet ສຳເລັດ!');
 
       await Future.delayed(const Duration(milliseconds: 1500));
+
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
       }
+    } on Exception catch (e) {
+      // ✅ ດັກ Exception ສະເພາະ ບໍ່ໃຊ້ catch(e) ກວ້າງເກີນ
+      if (!mounted) return;
+
+      // ✅ ດຶງ Message ສະອາດ (ໂດຍບໍ່ຕ້ອງ replaceAll ເອົາ)
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      _showSnack(
+        msg.isNotEmpty ? msg : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່',
+        isError: true,
+      );
     } catch (e) {
-      // 3. ຖ້າ Backend ຕອບ 400, 502, 500 ມັນຈະຕົກມາບ່ອນນີ້
-      if (mounted) {
-        // ສະແດງຂໍ້ຄວາມ Error ແທ້ໆ ທີ່ມາຈາກ Backend
-        String msg = e.toString().replaceAll('Exception: ', '');
-        _showSnack(msg, isError: true); // ຈະເປັນ SnackBar ສີແດງ
-      }
+      // ✅ ດັກ Error ທີ່ບໍ່ຄາດຄິດ (Network, Type errors, ...)
+      if (!mounted) return;
+      _showSnack('ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ ກະລຸນາລອງໃໝ່', isError: true);
+      debugPrint('❌ Register unexpected error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

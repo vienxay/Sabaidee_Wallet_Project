@@ -14,63 +14,92 @@ const generateToken = (id) =>
 // ─── POST /api/auth/register ─────────────────────────────────────────────────
 exports.register = async (req, res) => {
     try {
-        // 1. ຮັບຂໍ້ມູນຈາກ Body (ໃຊ້ walletName ໃຫ້ກົງກັບທີ່ Flutter ສົ່ງມາ)
         const { walletName, email, password } = req.body;
-        const name = walletName; // ໃຊ້ walletName ເປັນຊື່ User ເລີຍ
+        const name = walletName;
 
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ' });
         }
 
-        // 2. ກວດສອບ Email ຊ້ຳກ່ອນຈະໄປລົມກັບ LNbits (ເພື່ອປະຫຍັດ Resource)
         const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser) {
             return res.status(409).json({ success: false, message: 'Email ນີ້ຖືກໃຊ້ງານແລ້ວ' });
         }
 
-        // 3. 🔥 ຂັ້ນຕອນສຳຄັນ: ພະຍາຍາມສ້າງ Lightning Wallet ໃນ LNbits ກ່ອນ
+        // ── Step 3: ສ້າງ LNbits Wallet ──
         let walletResult;
         try {
             walletResult = await lnbits.createWallet(name);
-            
-            // ກວດສອບວ່າ LNbits ສົ່ງຂໍ້ມູນທີ່ຈຳເປັນມາຄົບຫຼືບໍ່
-            if (!walletResult || !walletResult.walletId || !walletResult.adminKey) {
+
+            // 🔴 ກວດສອບ invoiceKey ດ້ວຍ (ບໍ່ແມ່ນແຕ່ walletId/adminKey)
+            if (
+                !walletResult ||
+                !walletResult.walletId ||
+                !walletResult.adminKey ||
+                !walletResult.invoiceKey  // ເພີ່ມ
+            ) {
                 throw new Error('LNbits response is incomplete');
             }
         } catch (walletError) {
             console.error('❌ LNbits Connection Error:', walletError.message);
-            // ຖ້າສ້າງ Wallet ບໍ່ໄດ້ ໃຫ້ຕອບກັບ Error ທັນທີ ແລະ ຢຸດການເຮັດວຽກ
-            return res.status(503).json({ 
-                success: false, 
-                message: 'ບໍ່ສາມາດສ້າງ Wallet ໄດ້ໃນຂະນະນີ້ (LNbits Offline), ກະລຸນາລອງໃໝ່ພາຍຫຼັງ' 
+            return res.status(503).json({
+                success: false,
+                message: 'ບໍ່ສາມາດສ້າງ Wallet ໄດ້ໃນຂະນະນີ້, ກະລຸນາລອງໃໝ່ພາຍຫຼັງ',
             });
         }
 
-        // 4. ເມື່ອສ້າງ Wallet ສຳເລັດແລ້ວ ຈຶ່ງຄ່ອຍສ້າງ User ໃນ Database
-        const user = await User.create({ 
-            name, 
-            email: email.toLowerCase(), 
-            password 
-        });
+        // ── Steps 4-6: DB Operations ພາຍໃນ try/catch ດຽວ ──
+        let user, wallet;
+        try {
+            user = await User.create({
+                name,
+                email: email.toLowerCase(),
+                password,
+            });
 
-        // 5. ສ້າງ Record ໃນ Collection Wallet ຂອງເຮົາເອງ
-        const wallet = await Wallet.create({
-            user:       user._id,
-            walletId:   walletResult.walletId,
-            walletName: walletResult.walletName || name,
-            adminKey:   walletResult.adminKey,
-            invoiceKey: walletResult.invoiceKey,
-        });
+            wallet = await Wallet.create({
+                user:       user._id,
+                walletId:   walletResult.walletId,
+                walletName: walletResult.walletName || name,
+                adminKey:   walletResult.adminKey,
+                invoiceKey: walletResult.invoiceKey,
+            });
 
-        // 6. ຜູກ Wallet ID ໃສ່ກັບ User
-        user.wallet = wallet._id;
-        await user.save({ validateBeforeSave: false });
+            user.wallet = wallet._id;
+            await user.save({ validateBeforeSave: false });
+
+        } catch (dbError) {
+            console.error('❌ DB Error after wallet created:', dbError.message);
+
+            // 🔴 Rollback: ພະຍາຍາມລຶບ Wallet ໃນ LNbits (ຖ້າ API ຮອງຮັບ)
+            try {
+                await lnbits.deleteWallet(walletResult.walletId, walletResult.adminKey);
+                console.log('🔄 LNbits wallet rolled back successfully');
+            } catch (rollbackError) {
+                // ຖ້າ rollback ບໍ່ສຳເລັດ → log ໄວ້ສຳລັບ manual cleanup
+                console.error(
+                    '⚠️ MANUAL CLEANUP NEEDED - Orphaned LNbits Wallet:',
+                    walletResult.walletId
+                );
+            }
+
+            // ພະຍາຍາມລຶບ User ທີ່ອາດຖືກສ້າງໄປແລ້ວ
+            if (user?._id) {
+                await User.findByIdAndDelete(user._id).catch((e) =>
+                    console.error('⚠️ Failed to cleanup user:', e.message)
+                );
+            }
+
+            return res.status(500).json({
+                success: false,
+                message: 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ, ກະລຸນາລອງໃໝ່',
+            });
+        }
 
         const token = generateToken(user._id);
+        console.log(`✅ Register ສຳເລັດ: ${user.email} | Wallet: ${wallet.walletId}`);
 
-        console.log(`✅ Register ສຳເລັດ: User ${user.email} ພ້ອມ Wallet ${wallet.walletId}`);
-
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: 'ສະໝັກສະມາຊິກ ແລະ ສ້າງ Wallet ສຳເລັດ',
             token,
