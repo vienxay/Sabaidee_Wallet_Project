@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../widgets/custom_button.dart';
-import '../security/forgot_password.dart';
+import '../../../widgets/custom_button.dart';
+import 'forgot_password.dart';
 import 'package:sabaidee_wallet/core/core.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -56,9 +56,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    _autoVerifyTimer?.cancel(); // ✅
-    for (final c in _controllers) c.dispose();
-    for (final f in _focusNodes) f.dispose();
+    _autoVerifyTimer?.cancel();
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -139,7 +143,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   void _clearOtp() {
-    for (final c in _controllers) c.clear();
+    for (final c in _controllers) {
+      c.clear();
+    }
     setState(() {});
     _focusNodes.first.requestFocus();
   }

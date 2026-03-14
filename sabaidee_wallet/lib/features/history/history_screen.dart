@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../core/core.dart';
-import '../models/app_models.dart';
-import '../services/transaction_service.dart';
-import 'payment_detail_screen.dart';
+import '../../core/core.dart';
+import '../../models/app_models.dart';
+import '../../services/transaction_service.dart';
+import '../payment/payment_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -244,7 +244,7 @@ class _TxCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

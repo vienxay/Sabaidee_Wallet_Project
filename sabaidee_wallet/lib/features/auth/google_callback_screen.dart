@@ -1,7 +1,7 @@
 // lib/screens/google_callback_screen.dart
 import 'package:flutter/material.dart';
-import '../services/storage_service.dart';
-import '../models/user_model.dart';
+import '../../services/storage_service.dart';
+import '../../models/user_model.dart';
 
 class GoogleCallbackScreen extends StatefulWidget {
   static const routeName = '/auth/callback';

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:sabaidee_wallet/core/core.dart';
-import '../services/auth_service.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_textfield.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/custom_button.dart';
+import '../../widgets/custom_textfield.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key}); // ✅ super.key
@@ -133,8 +133,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _nameCtrl,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'ກະລຸນາໃສ່ຊື່';
-                  if (v.trim().length < 2)
+                  if (v.trim().length < 2) {
                     return 'ຊື່ຕ້ອງມີຢ່າງໜ້ອຍ 2 ຕົວອັກສອນ';
+                  }
                   return null;
                 },
               ),

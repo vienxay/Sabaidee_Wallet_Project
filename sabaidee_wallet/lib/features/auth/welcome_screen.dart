@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/custom_button.dart';
+import '../../widgets/custom_button.dart';
 import 'package:sabaidee_wallet/core/core.dart';
 
 class WelcomeScreen extends StatelessWidget {

@@ -6,8 +6,10 @@ import 'payment_success_sheet.dart';
 
 class SendSheet extends StatefulWidget {
   final WalletModel? wallet;
+  final String? invoice;
   final VoidCallback? onSuccess;
-  const SendSheet({super.key, this.wallet, this.onSuccess});
+
+  const SendSheet({super.key, this.wallet, this.invoice, this.onSuccess});
   @override
   State<SendSheet> createState() => _SendSheetState();
 }
@@ -17,6 +19,14 @@ class _SendSheetState extends State<SendSheet> {
   bool _loading = false;
   String? _error;
   DecodedInvoiceModel? _decoded;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.invoice != null) {
+      _invoiceCtrl.text = widget.invoice!;
+    }
+  }
 
   @override
   void dispose() {
@@ -302,7 +312,9 @@ class _SendSheetState extends State<SendSheet> {
                 onPressed: _loading ? null : _decode,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: AppColors.primary.withOpacity(0.5),
+                  disabledBackgroundColor: AppColors.primary.withValues(
+                    alpha: 0.5,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),

@@ -1,3 +1,6 @@
+// ✅ ໃໝ່ — ເພີ່ມ library; ກ່ອນ Comment
+library;
+
 /// Barrel file — import ດຽວໄດ້ທຸກຢ່າງ
 ///
 /// ການໃຊ້:

@@ -2,14 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'screens/welcome_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/google_callback_screen.dart';
-import 'screens/forgot_password_screen.dart';
-import 'screens/home_screen.dart';
-import 'security/otp_verification.dart';
-import 'security/reset_password.dart';
+import 'features/auth/welcome_screen.dart';
+import 'features/auth/login_screen.dart';
+import 'features/auth/register_screen.dart';
+import 'features/auth/google_callback_screen.dart';
+import 'features/auth/forgot_password_screen.dart';
+import 'features/home/home_screen.dart';
+import 'features/auth/security/otp_verification.dart';
+import 'features/auth/security/reset_password.dart';
 import 'services/auth_service.dart';
 import 'services/storage_service.dart';
 // ✅ ລຶບ session_service import ອອກ

@@ -13,9 +13,13 @@ class StorageService {
 
   SharedPreferences? _prefs;
   final _secureStorage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: false, // ← ປ່ຽນ
+      keyCipherAlgorithm:
+          KeyCipherAlgorithm.RSA_ECB_OAEPwithSHA_256andMGF1Padding,
+      storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
+    ),
     iOptions: IOSOptions(
-      // ✅ ບໍ່ sync ຂ້າມ iCloud — ປອດໄພກວ່າ
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
   );
@@ -107,8 +111,9 @@ class StorageService {
 
   // ── Generic Utilities ─────────────────────────────────────────────────────
   Future<void> setString(String key, String value) async {
-    if (key.isEmpty)
+    if (key.isEmpty) {
       throw Exception('Storage key cannot be empty'); // ✅ validate
+    }
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       await prefs.setString(key, value);

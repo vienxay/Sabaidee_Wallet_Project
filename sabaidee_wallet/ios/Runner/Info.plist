@@ -17,6 +17,8 @@
 	</dict>
 	</array>
 
+	<key>NSCameraUsageDescription</key>
+	<string>ຕ້ອງການໃຊ້ກ້ອງເພື່ອສະແກນ QR Code</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

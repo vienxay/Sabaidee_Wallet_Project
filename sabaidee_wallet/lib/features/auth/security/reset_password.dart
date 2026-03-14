@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../widgets/custom_button.dart';
-import '../widgets/custom_textfield.dart';
-import '../security/forgot_password.dart';
+import '../../../widgets/custom_button.dart';
+import '../../../widgets/custom_textfield.dart';
+import 'forgot_password.dart';
 import 'package:sabaidee_wallet/core/core.dart';
 
 class ResetPasswordScreen extends StatefulWidget {

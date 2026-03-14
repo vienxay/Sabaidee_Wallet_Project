@@ -18,11 +18,9 @@ class _MenuDrawerState extends State<MenuDrawer> {
     setState(() => _isLoggingOut = true);
 
     try {
-      // 1. ດຶງ token ຈາກ local storage
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(AppConstants.tokenKey);
 
-      // 2. ຮ້ອງ POST /api/auth/logout (best effort — ບໍ່ block ຖ້າ fail)
       if (token != null) {
         await http
             .post(
@@ -39,18 +37,16 @@ class _MenuDrawerState extends State<MenuDrawer> {
       }
     } catch (_) {
       // ບໍ່ block logout ຖ້າ network error
-    } finally {
-      // 3. ລຶບຂໍ້ມູນ local ທັງໝົດ
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(AppConstants.tokenKey);
-      await prefs.remove(AppConstants.userKey);
-
-      if (!mounted) return;
-      setState(() => _isLoggingOut = false);
-
-      // 4. Navigate ໄປ login + ລຶບ stack ທັງໝົດ
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     }
+
+    // ✅ ຍ້າຍ Cleanup + Navigate ອອກຈາກ finally
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(AppConstants.tokenKey);
+    await prefs.remove(AppConstants.userKey);
+
+    if (!mounted) return;
+    setState(() => _isLoggingOut = false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   // ─── Confirm Dialog ────────────────────────────────────────────────────────
