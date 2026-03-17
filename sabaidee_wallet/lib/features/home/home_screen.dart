@@ -4,6 +4,7 @@ import '../../core/core.dart';
 import '../../models/app_models.dart';
 import '../../services/wallet_service.dart';
 import '../../services/transaction_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/menu_drawer.dart';
 import '../../widgets/receive_sheet.dart';
 import '../../widgets/send_sheet.dart';
@@ -32,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ─── Data State ───────────────────────────────────────────────────────────
   bool _loading = true;
+  UserModel? _user; // ✅ ເພີ່ມ user
   WalletModel? _wallet;
   List<TransactionModel> _recentTx = [];
   String? _error;
@@ -50,12 +52,22 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
 
-    final walletRes = await WalletService.instance.getWallet();
-    final txRes = await TransactionService.instance.getTransactions(limit: 5);
+    // ✅ ດຶງຂໍ້ມູນທັງ 3 ພ້ອມກັນ
+    final results = await Future.wait([
+      AuthService.instance.getMe(),
+      WalletService.instance.getWallet(),
+      TransactionService.instance.getTransactions(limit: 5),
+    ]);
 
     if (!mounted) return;
+
+    final user = results[0] as UserModel?;
+    final walletRes = results[1] as WalletResult<WalletModel>;
+    final txRes = results[2] as WalletResult<List<TransactionModel>>;
+
     setState(() {
       _loading = false;
+      _user = user;
       if (walletRes.success) _wallet = walletRes.data;
       if (txRes.success) _recentTx = txRes.data ?? [];
       if (!walletRes.success) _error = walletRes.message;
@@ -131,7 +143,8 @@ class _HomeScreenState extends State<HomeScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        HomeTopBar(scaffoldKey: _scaffoldKey),
+        // ✅ ສົ່ງ user ໄປ HomeTopBar
+        HomeTopBar(scaffoldKey: _scaffoldKey, user: _user),
         const SizedBox(height: 12),
 
         HomeBalanceCard(
@@ -158,12 +171,16 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   // ─── Actions ──────────────────────────────────────────────────────────────
-  void _openReceive() => showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => ReceiveSheet(wallet: _wallet),
-  );
+  void _openReceive() async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ReceiveSheet(wallet: _wallet),
+    );
+    // ✅ refresh ຖ້າ TopUp ສຳເລັດ
+    if (result == true && mounted) _loadData();
+  }
 
   void _openHistory() => Navigator.push(
     context,

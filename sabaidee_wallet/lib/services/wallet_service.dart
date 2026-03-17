@@ -61,6 +61,19 @@ class WalletService {
     }
     return WalletResult.failure(res.message);
   }
+
+  // ─── ກວດສະຖານະ Invoice ວ່າຈ່າຍແລ້ວບໍ່ ──────────────────────────────────
+  Future<WalletResult<Map<String, dynamic>>> checkPaymentStatus({
+    required String paymentHash,
+  }) async {
+    final res = await _api.get(
+      '${AppConstants.walletTopup}/$paymentHash/status',
+    );
+    if (res.success && res.data != null) {
+      return WalletResult.success(res.data!);
+    }
+    return WalletResult.failure(res.message);
+  }
 }
 
 // Result Wrapper ໄວ້ໃຊ້ຮ່ວມກັນທຸກ Service

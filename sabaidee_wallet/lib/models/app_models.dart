@@ -3,6 +3,7 @@ class UserModel {
   final String id;
   final String name;
   final String email;
+  final String? profileImage;
   final String kycStatus;
   final DateTime? createdAt;
 
@@ -10,6 +11,7 @@ class UserModel {
     required this.id,
     required this.name,
     required this.email,
+    this.profileImage,
     required this.kycStatus,
     this.createdAt,
   });
@@ -18,6 +20,7 @@ class UserModel {
     id: j['id'] as String? ?? '',
     name: j['name'] as String? ?? '',
     email: j['email'] as String? ?? '',
+    profileImage: j['profileImage']?.toString(),
     kycStatus: j['kycStatus'] as String? ?? 'pending',
     createdAt: j['createdAt'] != null
         ? DateTime.tryParse(j['createdAt'])
@@ -28,6 +31,7 @@ class UserModel {
     'id': id,
     'name': name,
     'email': email,
+    'profileImage': profileImage,
     'kycStatus': kycStatus,
   };
 

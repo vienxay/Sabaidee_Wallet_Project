@@ -42,6 +42,9 @@ class SabaideeWallet extends StatelessWidget {
   Widget get _initialScreen =>
       isLoggedIn ? const HomeScreen() : const WelcomeScreen();
 
+  // ✅ ໃໝ່ — ໄປ RegisterScreen ທັນທີ
+  // Widget get _initialScreen => const RegisterScreen();
+
   @override
   Widget build(BuildContext context) {
     // ✅ ລຶບ GestureDetector ອອກ — ບໍ່ຕ້ອງການແລ້ວ

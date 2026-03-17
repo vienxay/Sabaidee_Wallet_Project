@@ -39,6 +39,7 @@ class UserModel {
   final String id;
   final String name;
   final String email;
+  final String? profileImage;
   final KycStatus? kycStatus;
   final bool isGoogleAccount;
   final WalletModel? wallet;
@@ -47,6 +48,7 @@ class UserModel {
     required this.id,
     required this.name,
     required this.email,
+    this.profileImage,
     this.kycStatus,
     this.isGoogleAccount = false,
     this.wallet,
@@ -58,6 +60,7 @@ class UserModel {
       id: rawId ?? (throw ArgumentError('UserModel: missing id')),
       name: json['name']?.toString().trim() ?? '',
       email: json['email']?.toString().trim() ?? '',
+      profileImage: json['profileImage']?.toString(),
       kycStatus: _parseKycStatus(json['kycStatus']),
       isGoogleAccount: json['isGoogleAccount'] ?? false,
       wallet: json['wallet'] != null

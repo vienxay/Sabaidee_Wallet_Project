@@ -22,6 +22,9 @@ class AppConstants {
   static const String authGoogle = '/api/auth/google';
   static const String authProfile = '/api/auth/profile';
   static const String authPassword = '/api/auth/password';
+  static const String baseUrl = apiBaseUrl; // ✅ alias ສຳລັບ upload
+  static const String authProfileImage =
+      '/api/auth/profile/image'; // ✅ route ໃໝ່
 
   // ─── Wallet ──────────────────────────────────────────────────────────────────
   static const String wallet = '/api/wallet';

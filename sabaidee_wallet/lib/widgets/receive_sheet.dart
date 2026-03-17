@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../core/core.dart';
 import '../models/app_models.dart';
 import '../services/wallet_service.dart';
@@ -19,6 +20,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
   String? _paymentHash;
   String? _error;
   Timer? _pollTimer;
+  bool _paid = false;
 
   @override
   void dispose() {
@@ -62,8 +64,22 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
   void _startPolling() {
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (_paymentHash == null) return;
-      // TODO: ເອີ້ນ TransactionService.instance.checkPaymentStatus(_paymentHash!)
-      // ຖ້າ paid → ປິດ sheet + refresh home
+
+      final res = await WalletService.instance.checkPaymentStatus(
+        paymentHash: _paymentHash!,
+      );
+
+      if (!mounted) return;
+
+      if (res.success && res.data?['paid'] == true) {
+        _pollTimer?.cancel();
+        setState(() => _paid = true);
+
+        // ✅ ລໍ 2 ວິ ໃຫ້ user ເຫັນ success ແລ້ວປິດ + refresh home
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        Navigator.pop(context, true); // true = signal ໃຫ້ home refresh
+      }
     });
   }
 
@@ -127,7 +143,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
           ),
           const SizedBox(height: 20),
 
-          // Balance
+          // ─── Balance ──────────────────────────────────────────────────────
           Text(
             '$sats Sats',
             style: const TextStyle(
@@ -142,8 +158,26 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
           ),
           const SizedBox(height: 20),
 
-          if (_invoice == null) ...[
-            // Amount input
+          // ─── Paid ─────────────────────────────────────────────────────────
+          if (_paid) ...[
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Colors.green,
+              size: 72,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'ຮັບເງິນສຳເລັດ! ✅',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ]
+          // ─── Input amount ─────────────────────────────────────────────────
+          else if (_invoice == null) ...[
             TextField(
               controller: _amountCtrl,
               keyboardType: TextInputType.number,
@@ -161,21 +195,24 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
               ),
             ),
             const SizedBox(height: 16),
-          ] else ...[
-            // QR
+          ]
+          // ─── QR + waiting ─────────────────────────────────────────────────
+          else ...[
             Container(
-              width: 180,
-              height: 180,
-              padding: const EdgeInsets.all(12),
+              width: 200,
+              height: 200,
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.primaryLight,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: AppColors.primary, width: 1.5),
               ),
-              child: const Icon(
-                Icons.qr_code_2_rounded,
-                size: 156,
-                color: AppColors.primary,
+              child: QrImageView(
+                data: _invoice!,
+                version: QrVersions.auto,
+                size: 180,
+                backgroundColor: Colors.white,
+                errorCorrectionLevel: QrErrorCorrectLevel.M,
               ),
             ),
             const SizedBox(height: 12),
@@ -228,42 +265,44 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             const SizedBox(height: 12),
           ],
 
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _loading
-                  ? null
-                  : (_invoice == null ? _createInvoice : _copyInvoice),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                disabledBackgroundColor: AppColors.primary.withValues(
-                  alpha: 0.5,
+          // ─── Button ───────────────────────────────────────────────────────
+          if (!_paid)
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _loading
+                    ? null
+                    : (_invoice == null ? _createInvoice : _copyInvoice),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: AppColors.primary.withValues(
+                    alpha: 0.5,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
+                child: _loading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        _invoice == null ? 'Create Invoice' : 'ສຳເນົາ Invoice',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      _invoice == null ? 'Create Invoice' : 'ສຳເນົາ Invoice',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
             ),
-          ),
         ],
       ),
     );
