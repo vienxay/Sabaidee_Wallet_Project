@@ -23,7 +23,11 @@ const userSchema = new mongoose.Schema(
             minlength: [6, 'ລະຫັດຕ້ອງມີຢ່າງນ້ອຍ 6 ຕົວອັກສອນ'],
             select: false,
         },
-        // Google OAuth fields
+        // ✅ ເພີ່ມ profileImage
+        profileImage: {
+            type: String,
+            default: null,
+        },
         googleId: {
             type: String,
             default: null,
@@ -39,46 +43,35 @@ const userSchema = new mongoose.Schema(
             enum: ['pending', 'verified', 'rejected'],
             default: 'pending',
         },
-
         wallet: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Wallet',
             default: null,
         },
-
-       // ແທນ embedded object ດ້ວຍ ref ໄປຫາ Wallet collection
-        resetPasswordOTP: { type: String, select: false },
-        resetPasswordOTPExpiry: { type: Date, select: false },
-        resetPasswordOTPVerified: { type: Boolean, default: false, select: false },
+        resetPasswordOTP:          { type: String,  select: false },
+        resetPasswordOTPExpiry:    { type: Date,    select: false },
+        resetPasswordOTPVerified:  { type: Boolean, default: false, select: false },
     },
     { timestamps: true }
 );
 
-// Hash password ກ່ອນ save + error handling
-userSchema.pre('save', async function() {
-    if (!this.isModified('password')) {
-        return; 
-    }
+userSchema.pre('save', async function () {
+    if (!this.isModified('password')) return;
     try {
         this.password = await bcrypt.hash(this.password, 12);
     } catch (error) {
-        throw error; 
+        throw error;
     }
 });
 
-//Compare password + guard clause
-userSchema.methods.comparePassword = async function(candidatePassword) {
-    if (!this.password) {
-        throw new Error('Password not selected. Use .select("+password")');
-    }
+userSchema.methods.comparePassword = async function (candidatePassword) {
+    if (!this.password) throw new Error('Password not selected. Use .select("+password")');
     return await bcrypt.compare(candidatePassword, this.password);
 };
 
-//Check if user has wallet
-userSchema.methods.hasWallet = function() {
+userSchema.methods.hasWallet = function () {
     return this.wallet !== null;
 };
 
 const User = mongoose.model('User', userSchema);
-
 module.exports = User;

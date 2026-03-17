@@ -87,6 +87,7 @@ exports.topUp = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
+
         const rate      = await exchangeRate.getExchangeRate();
         const amountLAK = await exchangeRate.convertSatsToLAK(amountSats);
 
@@ -173,6 +174,46 @@ exports.withdraw = async (req, res) => {
         });
     } catch (error) {
         console.error('Withdraw Error:', error);
+        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
+    }
+};
+
+// ─── GET /api/wallet/topup/:paymentHash/status ────────────────────────────────
+// ເພີ່ມຕໍ່ທ້າຍ walletController.js
+ 
+exports.checkPaymentStatus = async (req, res) => {
+    try {
+        const { paymentHash } = req.params;
+ 
+        const wallet = await Wallet.findOne({ user: req.user._id });
+        if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
+ 
+        // ກວດສະຖານະຈາກ LNbits
+        const result = await lnbits.checkPaymentStatus({
+            invoiceKey: wallet.invoiceKey,
+            paymentHash,
+        });
+ 
+        // ຖ້າຈ່າຍແລ້ວ — update transaction + balance
+        if (result.paid) {
+            await Transaction.findOneAndUpdate(
+                { paymentHash, user: req.user._id },
+                { status: 'success' },
+            );
+ 
+            // Refresh balance
+            const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
+            wallet.balanceSats = balanceResult.balanceSats;
+            await wallet.save();
+        }
+ 
+        res.status(200).json({
+            success: true,
+            paid: result.paid,
+            status: result.status,
+        });
+    } catch (error) {
+        console.error('CheckPaymentStatus Error:', error);
         return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
     }
 };
