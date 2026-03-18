@@ -1,4 +1,5 @@
-// lib/main.dart
+// lib/main.dart — Sabaidee Wallet (ອັບເດດ: ເພີ່ມ KYC route + sync)
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,9 +11,10 @@ import 'features/auth/forgot_password_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/auth/security/otp_verification.dart';
 import 'features/auth/security/reset_password.dart';
+import 'features/kyc/kyc_screen.dart'; // ✅ ໃໝ່
 import 'services/auth_service.dart';
 import 'services/storage_service.dart';
-// ✅ ລຶບ session_service import ອອກ
+import 'services/kyc_gate_service.dart'; // ✅ ໃໝ່
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +34,12 @@ void main() async {
   await StorageService.instance.init();
   final isLoggedIn = await AuthService.instance.isLoggedIn();
 
+  // ✅ Sync KYC status ຈາກ backend ທຸກຄັ້ງທີ່ app ເປີດ
+  // (ບໍ່ await — ໃຫ້ run background ບໍ່ block splash)
+  if (isLoggedIn) {
+    KycGateService.instance.syncFromBackend();
+  }
+
   runApp(SabaideeWallet(isLoggedIn: isLoggedIn));
 }
 
@@ -42,12 +50,8 @@ class SabaideeWallet extends StatelessWidget {
   Widget get _initialScreen =>
       isLoggedIn ? const HomeScreen() : const WelcomeScreen();
 
-  // ✅ ໃໝ່ — ໄປ RegisterScreen ທັນທີ
-  // Widget get _initialScreen => const RegisterScreen();
-
   @override
   Widget build(BuildContext context) {
-    // ✅ ລຶບ GestureDetector ອອກ — ບໍ່ຕ້ອງການແລ້ວ
     return MaterialApp(
       title: 'Sabaidee Wallet',
       debugShowCheckedModeBanner: false,
@@ -65,6 +69,7 @@ class SabaideeWallet extends StatelessWidget {
         '/otp-verification': (_) => const OtpVerificationScreen(),
         '/reset-password': (_) => const ResetPasswordScreen(),
         '/home': (_) => const HomeScreen(),
+        '/kyc': (_) => const KycScreen(), // ✅ ໃໝ່
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
       },
       onUnknownRoute: (settings) =>
