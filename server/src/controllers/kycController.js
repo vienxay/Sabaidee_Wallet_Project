@@ -1,144 +1,199 @@
-const KYC = require('../models/KYC');
+// controllers/kycController.js
 const User = require('../models/User');
+const Kyc  = require('../models/Kyc');
+const { cloudinary } = require('../services/cloudinaryService');
 
-// ─── GET /api/kyc ─────────────────────────────────────────────────────────────
-// ດຶງ KYC status ຂອງ user
+const genRefId = () => 'KYC-' + Date.now().toString(36).toUpperCase();
 
-exports.getKYCStatus = async (req, res) => {
+const uploadToCloudinary = (buffer, folder) =>
+    new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+            { folder, resource_type: 'image' },
+            (err, result) => err ? reject(err) : resolve(result)
+        ).end(buffer);
+    });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/kyc/submit
+// ─────────────────────────────────────────────────────────────────────────────
+exports.submitKyc = async (req, res) => {
     try {
-        const kyc = await KYC.findOne({ user: req.user._id });
+        const userId = req.user._id;
 
-        if (!kyc) {
-            return res.status(200).json({
-                success: true,
-                kyc: { status: 'pending', message: 'ຍັງບໍ່ໄດ້ຍື່ນ KYC' },
+        // ── ກວດ duplicate ───────────────────────────────────────────────────
+        if (['pending', 'verified'].includes(req.user.kycStatus)) {
+            return res.status(409).json({
+                success: false,
+                message: req.user.kycStatus === 'verified'
+                    ? 'KYC ຂອງທ່ານຜ່ານການຢືນຢັນແລ້ວ'
+                    : 'KYC ຂອງທ່ານກຳລັງຖືກກວດສອບຢູ່',
+                kycStatus: req.user.kycStatus,
             });
         }
 
-        res.status(200).json({
-            success: true,
-            kyc: {
-                status:       kyc.status,
-                fullName:     kyc.fullName,
-                idType:       kyc.idType,
-                submittedAt:  kyc.submittedAt,
-                verifiedAt:   kyc.verifiedAt,
-                rejectedReason: kyc.rejectedReason,
-                limit: {
-                    dailyLimitSats:   kyc.dailyLimitSats,
-                    monthlyLimitSats: kyc.monthlyLimitSats,
-                },
-            },
+        // ── Validate fields ─────────────────────────────────────────────────
+        const {
+            fullName, dob, passportNumber, expiryDate, gender,
+             placeOfBirth,  isPep, 
+            consentData, consentPdpa,
+        } = req.body;
+
+        if (!fullName || !dob || !passportNumber || !expiryDate || !gender) {
+            return res.status(400).json({
+                success: false,
+                message: 'ຂໍ້ມູນບໍ່ຄົບ: fullName, dob, passportNumber, expiryDate, gender',
+            });
+        }
+        if (consentData !== 'true') {
+            return res.status(400).json({
+                success: false,
+                message: 'ຕ້ອງຍິນຍອມ consentData',
+            });
+        }
+        if (!req.files?.idFront?.[0] || !req.files?.selfie?.[0]) {
+            return res.status(400).json({
+                success: false,
+                message: 'ຕ້ອງອັບໂຫລດ idFront ແລະ selfie',
+            });
+        }
+
+        // ── Upload Cloudinary ───────────────────────────────────────────────
+        const uploadPromises = [
+            uploadToCloudinary(req.files.idFront[0].buffer, `kyc/${userId}/idFront`),
+            uploadToCloudinary(req.files.selfie[0].buffer,  `kyc/${userId}/selfie`),
+        ];
+        
+
+        const [frontResult, selfieResult, backResult] = await Promise.all(uploadPromises);
+
+        // ── Save Kyc document ───────────────────────────────────────────────
+        const referenceId = genRefId();
+        const kyc = await Kyc.create({
+            user:           userId,
+            fullName,
+            gender,
+            dob:            new Date(dob),
+            passportNumber: passportNumber.toUpperCase(),
+            nationality:    nationality  || 'null',
+            email:          req.user.email,
+            expiryDate:     new Date(expiryDate),
+            idFrontUrl:     frontResult.secure_url,
+            selfieUrl:      selfieResult.secure_url,
+            isPep:          isPep === 'true',
+            consentData:    true,
+            consentPdpa:    consentPdpa === 'true',
+            referenceId,
+            status:         'pending',
+            submittedAt:    new Date(),
+        });  
+
+        // ── Update User ─────────────────────────────────────────────────────
+        await User.findByIdAndUpdate(userId, {
+            kycStatus: 'pending',
+            kyc:       kyc._id,
         });
-    } catch (error) {
-        console.error('Get KYC Error:', error);
-        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
+
+        return res.status(201).json({
+            success:     true,
+            message:     'ສົ່ງ KYC ສຳເລັດ — ກຳລັງດຳເນີນການກວດສອບ',
+            referenceId,
+            kycStatus:   'pending',
+        });
+
+    } catch (err) {
+        console.error('submitKyc error:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error:   err.message,
+        });
     }
 };
 
-// ─── POST /api/kyc/submit ─────────────────────────────────────────────────────
-// ຍື່ນ KYC ໃໝ່
-
-exports.submitKYC = async (req, res) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/kyc — ດຶງ status + ລາຍລະອຽດ
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getMyKycStatus = async (req, res) => {
     try {
-        const { fullName, idNumber, idType, dateOfBirth, phone, address } = req.body;
+        const kyc = await Kyc.findOne({ user: req.user._id })
+            .select('-__v');
 
-        if (!fullName || !idNumber || !dateOfBirth || !phone) {
-            return res.status(400).json({ success: false, message: 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ' });
+        return res.json({
+            success:   true,
+            kycStatus: req.user.kycStatus,
+            kyc:       kyc || null,
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: 'Server error', error: err.message });
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/kyc/verify/:userId  (Admin)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.reviewKyc = async (req, res) => {
+    try {
+        const { status, reviewNote } = req.body;
+        if (!['verified', 'rejected'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'status ຕ້ອງເປັນ verified ຫລື rejected',
+            });
         }
 
-        // ກວດ KYC ທີ່ verified ແລ້ວ
-        const existingKYC = await KYC.findOne({ user: req.user._id });
-        if (existingKYC?.status === 'verified') {
-            return res.status(400).json({ success: false, message: 'KYC ຂອງທ່ານໄດ້ຮັບການຢືນຢັນແລ້ວ' });
-        }
+        const user = await User.findById(req.params.userId);
+        if (!user) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ User' });
 
-        // ກວດ idNumber ຊ້ຳ
-        const duplicateID = await KYC.findOne({ idNumber, user: { $ne: req.user._id } });
-        if (duplicateID) {
-            return res.status(409).json({ success: false, message: 'ເລກທີ່ບັດນີ້ຖືກໃຊ້ງານແລ້ວ' });
-        }
-
-        // ດຶງ URL ຮູບທີ່ upload (ຜ່ານ middleware multer/cloudinary)
-        const documents = {
-            idFront: req.files?.idFront?.[0]?.path || null,
-            idBack:  req.files?.idBack?.[0]?.path  || null,
-            selfie:  req.files?.selfie?.[0]?.path  || null,
-        };
-
-        if (!documents.idFront || !documents.idBack || !documents.selfie) {
-            return res.status(400).json({ success: false, message: 'ກະລຸນາອັບໂຫຼດຮູບໃຫ້ຄົບ (ໜ້າ, ຫຼັງ, selfie)' });
-        }
-
-        const kyc = await KYC.findOneAndUpdate(
-            { user: req.user._id },
+        // ── Update Kyc document ─────────────────────────────────────────────
+        await Kyc.findOneAndUpdate(
+            { user: user._id },
             {
-                user: req.user._id,
-                fullName, idNumber,
-                idType:      idType || 'national_id',
-                dateOfBirth: new Date(dateOfBirth),
-                phone, address,
-                documents,
-                status:      'submitted',
-                submittedAt: new Date(),
-                rejectedReason: null,
-            },
-            { upsert: true, new: true }
+                status,
+                reviewNote:  reviewNote || null,
+                reviewedBy:  req.user._id,
+                reviewedAt:  new Date(),
+            }
         );
 
-        // ອັບເດດ kycStatus ໃນ User ດ້ວຍ
-        await User.findByIdAndUpdate(req.user._id, { kycStatus: 'pending' });
+        // ── Update User kycStatus ───────────────────────────────────────────
+        user.kycStatus = status;
+        await user.save();
 
-        res.status(201).json({
+        return res.json({
             success: true,
-            message: 'ຍື່ນ KYC ສຳເລັດ — ກຳລັງລໍຖ້າການກວດສອບ',
-            kyc: { status: kyc.status, submittedAt: kyc.submittedAt },
+            message: `KYC ${status === 'verified' ? 'ຜ່ານການຢືນຢັນ' : 'ຖືກປະຕິເສດ'} ສຳເລັດ`,
+            user: {
+                id:        user._id,
+                name:      user.name,
+                email:     user.email,
+                kycStatus: user.kycStatus,
+            },
         });
-    } catch (error) {
-        console.error('Submit KYC Error:', error);
-        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: 'Server error', error: err.message });
     }
 };
 
-// ─── PUT /api/kyc/verify/:userId  (Admin only) ────────────────────────────────
-// Admin ຢືນຢັນ KYC
-
-exports.verifyKYC = async (req, res) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/kyc/list?status=pending  (Admin)
+// ─────────────────────────────────────────────────────────────────────────────
+exports.listKyc = async (req, res) => {
     try {
-        const { userId } = req.params;
-        const { action, rejectedReason } = req.body; // action: 'approve' | 'reject'
+        const { status, page = 1, limit = 20 } = req.query;
+        const filter = status ? { status } : { status: { $in: ['pending', 'verified', 'rejected'] } };
 
-        const kyc = await KYC.findOne({ user: userId });
-        if (!kyc) {
-            return res.status(404).json({ success: false, message: 'ບໍ່ພົບ KYC' });
-        }
+        const [kycs, total] = await Promise.all([
+            Kyc.find(filter)
+                .populate('user', 'name email')
+                .select('-__v')
+                .sort({ submittedAt: -1 })
+                .skip((page - 1) * limit)
+                .limit(Number(limit)),
+            Kyc.countDocuments(filter),
+        ]);
 
-        if (action === 'approve') {
-            kyc.status     = 'verified';
-            kyc.verifiedAt = new Date();
-            kyc.dailyLimitSats   = 10_000_000; // ເພີ່ມ limit ຫຼັງ verify
-            kyc.monthlyLimitSats = 100_000_000;
-            await User.findByIdAndUpdate(userId, { kycStatus: 'verified' });
-        } else if (action === 'reject') {
-            if (!rejectedReason) {
-                return res.status(400).json({ success: false, message: 'ກະລຸນາລະບຸເຫດຜົນ' });
-            }
-            kyc.status         = 'rejected';
-            kyc.rejectedReason = rejectedReason;
-            await User.findByIdAndUpdate(userId, { kycStatus: 'rejected' });
-        } else {
-            return res.status(400).json({ success: false, message: 'action ຕ້ອງເປັນ approve ຫຼື reject' });
-        }
-
-        await kyc.save();
-
-        res.status(200).json({
-            success: true,
-            message: action === 'approve' ? 'KYC ຢືນຢັນສຳເລັດ' : 'KYC ຖືກປະຕິເສດ',
-            kyc: { status: kyc.status, verifiedAt: kyc.verifiedAt },
-        });
-    } catch (error) {
-        console.error('Verify KYC Error:', error);
-        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
+        return res.json({ success: true, total, page: Number(page), data: kycs });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: 'Server error', error: err.message });
     }
 };

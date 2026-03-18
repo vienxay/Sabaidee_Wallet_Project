@@ -1,5 +1,6 @@
+// models/User.js
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const bcrypt   = require('bcryptjs');
 
 const userSchema = new mongoose.Schema(
     {
@@ -23,50 +24,47 @@ const userSchema = new mongoose.Schema(
             minlength: [6, 'ລະຫັດຕ້ອງມີຢ່າງນ້ອຍ 6 ຕົວອັກສອນ'],
             select: false,
         },
-        // ✅ ເພີ່ມ profileImage
-        profileImage: {
+        profileImage:    { type: String,  default: null },
+        googleId:        { type: String,  default: null, sparse: true, index: true },
+        isGoogleAccount: { type: Boolean, default: false },
+        role: {
             type: String,
-            default: null,
+            enum: ['user', 'admin'],
+            default: 'user',
         },
-        googleId: {
-            type: String,
-            default: null,
-            sparse: true,
-            index: true,
-        },
-        isGoogleAccount: {
-            type: Boolean,
-            default: false,
-        },
+
+        // ✅ ເກັບແຕ່ status + ref — ລາຍລະອຽດຢູ່ kycs collection
         kycStatus: {
             type: String,
-            enum: ['pending', 'verified', 'rejected'],
-            default: 'pending',
+            enum: ['none', 'pending', 'verified', 'rejected'],
+            default: 'none',
         },
+        kyc: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Kyc',
+            default: null,
+        },
+
         wallet: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Wallet',
             default: null,
         },
-        resetPasswordOTP:          { type: String,  select: false },
-        resetPasswordOTPExpiry:    { type: Date,    select: false },
-        resetPasswordOTPVerified:  { type: Boolean, default: false, select: false },
+        resetPasswordOTP:         { type: String,  select: false },
+        resetPasswordOTPExpiry:   { type: Date,    select: false },
+        resetPasswordOTPVerified: { type: Boolean, default: false, select: false },
     },
     { timestamps: true }
 );
 
 userSchema.pre('save', async function () {
     if (!this.isModified('password')) return;
-    try {
-        this.password = await bcrypt.hash(this.password, 12);
-    } catch (error) {
-        throw error;
-    }
+    this.password = await bcrypt.hash(this.password, 12);
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
-    if (!this.password) throw new Error('Password not selected. Use .select("+password")');
-    return await bcrypt.compare(candidatePassword, this.password);
+    if (!this.password) throw new Error('Password not selected');
+    return bcrypt.compare(candidatePassword, this.password);
 };
 
 userSchema.methods.hasWallet = function () {

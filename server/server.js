@@ -45,8 +45,11 @@ app.use(passport.initialize())
 
 // General: 100 req / 15 ນາທີ
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    // windowMs: 15 * 60 * 1000,
+    windowMs: 60 * 60 * 1000,
+
+    // max: 100,
+    max: process.env.NODE_ENV === 'development' ? 100 : 5, // ✅
     message: { success: false, message: 'ມີການຮ້ອງຂໍຫຼາຍເກີນໄປ, ກະລຸນາລອງໃໝ່ພາຍຫຼັງ 15 ນາທີ' },
     standardHeaders: true,
     legacyHeaders: false,
