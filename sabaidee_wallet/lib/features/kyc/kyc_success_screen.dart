@@ -108,7 +108,7 @@ class _KycSuccessScreenState extends State<KycSuccessScreen>
                       color: AppColors.kGreenLight,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: AppColors.kGreen.withOpacity(0.3),
+                        color: AppColors.kGreen.withValues(alpha: 0.3),
                         width: 0.5,
                       ),
                     ),

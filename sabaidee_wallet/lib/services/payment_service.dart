@@ -16,7 +16,10 @@ class PaymentService {
       'paymentRequest': paymentRequest,
     });
     if (res.success && res.data != null) {
-      return WalletResult.success(DecodedInvoiceModel.fromJson(res.data!));
+      final invoiceData =
+          res.data!['invoice'] as Map<String, dynamic>? ??
+          res.data!; // fallback
+      return WalletResult.success(DecodedInvoiceModel.fromJson(invoiceData));
     }
     return WalletResult.failure(res.message);
   }
@@ -24,10 +27,12 @@ class PaymentService {
   Future<WalletResult<Map<String, dynamic>>> pay({
     required String paymentRequest,
     String memo = '',
+    int? amountSats,
   }) async {
     final res = await _api.post(AppConstants.paymentPay, {
       'paymentRequest': paymentRequest,
       if (memo.isNotEmpty) 'memo': memo,
+      if (amountSats != null) 'amount': amountSats,
     });
 
     if (res.success && res.data?['payment'] != null) {

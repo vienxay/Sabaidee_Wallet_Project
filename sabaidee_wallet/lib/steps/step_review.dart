@@ -89,7 +89,7 @@ class StepReview extends StatelessWidget {
                   Switch(
                     value: data.isPep,
                     onChanged: onTogglePep,
-                    activeColor: AppColors.kGreen,
+                    activeThumbColor: AppColors.kGreen,
                   ),
                 ],
               ),
@@ -111,7 +111,7 @@ class StepReview extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
-                    value: data.fundSource,
+                    initialValue: data.fundSource,
                     onChanged: onFundChanged,
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(

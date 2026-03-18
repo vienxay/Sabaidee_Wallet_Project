@@ -28,8 +28,9 @@ class KycService {
   }) async {
     try {
       final token = await _token();
-      if (token == null)
+      if (token == null) {
         return {'success': false, 'message': 'ກະລຸນາ login ກ່ອນ'};
+      }
 
       if (!data.uploadComplete) {
         return {'success': false, 'message': 'ຕ້ອງອັບໂຫລດຮູບໃຫ້ຄົບ 3 ໃບ'};

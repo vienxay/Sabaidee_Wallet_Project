@@ -174,7 +174,7 @@ class KycDateField extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: value != null
-                    ? AppColors.kGreen.withOpacity(0.5)
+                    ? AppColors.kGreen.withValues(alpha: 0.5)
                     : AppColors.kBorder,
                 width: 0.5,
               ),

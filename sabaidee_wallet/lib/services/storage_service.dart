@@ -8,20 +8,20 @@ import '../core/app_constants.dart';
 import '../models/user_model.dart';
 
 class StorageService {
+  // Singleton Pattern
   StorageService._();
   static final StorageService instance = StorageService._();
 
   SharedPreferences? _prefs;
+
+  // ✅ FIXED FOR v10: ລຶບ aOptions ີ່ deprecated ອກ
+  // ຊ້ default security ທີ່ດີທີ່ສຸດສຳລັບ Android (Android Keystore)
   final _secureStorage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: false, // ← ປ່ຽນ
-      keyCipherAlgorithm:
-          KeyCipherAlgorithm.RSA_ECB_OAEPwithSHA_256andMGF1Padding,
-      storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
-    ),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
+      // groupId: 'group.com.yourapp.shared', // ເປີດໃຊ້ຖ້າຕ້ອງການ App Groups ໃນ iOS
     ),
+    // webOptions: const WebOptions(), // ເປີດໃຊ້ຖ້າຮັນເທິງ Web
   );
 
   // ✅ ໃຊ້ AppConstants — single source of truth
@@ -39,10 +39,10 @@ class StorageService {
   Future<void> saveToken(String token) async {
     try {
       await _secureStorage.write(key: _keyToken, value: token);
-      debugPrint('🔐 Token saved');
+      debugPrint('🔐 Token saved successfully');
     } catch (e) {
       debugPrint('❌ Error saving token: $e');
-      throw Exception('ບໍ່ສາມາດບັນທຶກ token ໄດ້'); // ✅ Exception
+      throw Exception('ບໍ່ສາມາດບັນທຶກ token ດ້');
     }
   }
 
@@ -72,7 +72,7 @@ class StorageService {
       debugPrint('👤 User saved: ${user.email}');
     } catch (e) {
       debugPrint('❌ Error saving user: $e');
-      throw Exception('ບໍ່ສາມາດບັນທຶກຂໍ້ມູນຜູ້ໃຊ້ໄດ້'); // ✅ Exception
+      throw Exception('ບໍ່ສາມາດບັນທຶກຂໍ້ມູນຜູ້ໃຊ້ໄດ້');
     }
   }
 
@@ -80,12 +80,13 @@ class StorageService {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       final raw = prefs.getString(_keyUser);
+
       if (raw == null || raw.isEmpty) return null;
 
       return UserModel.fromJson(jsonDecode(raw));
     } on FormatException catch (e) {
       debugPrint('❌ Error parsing user JSON: $e');
-      await clearUser(); // ✅ ລົບຂໍ້ມູນເສຍຫາຍ
+      await clearUser(); // ✅ ລົບຂໍ້ມູນເສຍຫາຍ ປ້ອງກັນ Crash
       return null;
     } catch (e) {
       debugPrint('❌ Error reading user: $e');
@@ -105,14 +106,15 @@ class StorageService {
 
   // ── Clear All ─────────────────────────────────────────────────────────────
   Future<void> clearAll() async {
-    await Future.wait([clearToken(), clearUser()]); // ✅ parallel
+    // ✅ ລໍຖ້າທັງສອງຢ່າງໃຫ້ສຳເລັດແບບ Parallel
+    await Future.wait([clearToken(), clearUser()]);
     debugPrint('🧹 All storage cleared');
   }
 
   // ── Generic Utilities ─────────────────────────────────────────────────────
   Future<void> setString(String key, String value) async {
     if (key.isEmpty) {
-      throw Exception('Storage key cannot be empty'); // ✅ validate
+      throw Exception('Storage key cannot be empty');
     }
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
@@ -124,7 +126,7 @@ class StorageService {
   }
 
   Future<String?> getString(String key) async {
-    if (key.isEmpty) return null; // ✅ validate
+    if (key.isEmpty) return null;
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       return prefs.getString(key);
@@ -135,7 +137,7 @@ class StorageService {
   }
 
   Future<void> remove(String key) async {
-    if (key.isEmpty) return; // ✅ validate
+    if (key.isEmpty) return;
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       await prefs.remove(key);

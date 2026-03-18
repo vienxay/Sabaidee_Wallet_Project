@@ -1,20 +1,19 @@
 // lib/services/kyc_gate_service.dart
-// ✅ ໃຊ້ StorageService.instance.setString/getString ແທນ SharedPreferences ໂດຍກົງ
-//    ໃຫ້ consistent ກັບ storage pattern ຂອງທ່ານ
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/kyc_status.dart';
 import 'kyc_service.dart';
-import 'storage_service.dart'; // ✅ ໃຊ້ StorageService ຂອງທ່ານ
+import 'storage_service.dart';
 
-const double kKycDailyLimit = 5_000_000; // LAK — ແກ້ຕາມຕ້ອງການ
-const _kStatus = 'kyc_status'; // key ໃນ SharedPreferences
+const double kKycDailyLimit = 5_000_000;
+const _kStatus = 'user_kyc_status_v1'; // ✅ safer key
 
 class KycGateService {
   KycGateService._();
   static final instance = KycGateService._();
 
-  // ── Read / Write ───────────────────────────────────────────────────────────
+  // ── Read / Write ─────────────────────────────────────────────
   Future<KycStatus> getStatus() async {
     final raw = await StorageService.instance.getString(_kStatus);
     return KycStatusX.fromString(raw);
@@ -25,41 +24,42 @@ class KycGateService {
 
   Future<void> clearStatus() async => StorageService.instance.remove(_kStatus);
 
-  // ── Sync ຈາກ backend ─────────────────────────────────────────────────────
-  // ເອີ້ນໃນ main() ຫລັງ login ທຸກຄັ້ງ
+  // ── Sync ຈາກ backend ───────────────────────────────────────
   Future<void> syncFromBackend() async {
-    final res = await KycService.checkMyStatus(); // GET /api/kyc
+    final res = await KycService.checkMyStatus();
+
     if (res['success'] == true) {
-      final status = res['status'] as KycStatus;
-      await saveStatus(status);
+      final statusStr = res['status'] as String?; // ✅ FIX
+      if (statusStr != null) {
+        await saveStatus(KycStatusX.fromString(statusStr));
+      }
     }
   }
 
-  // ── Gate ───────────────────────────────────────────────────────────────────
-  /// ກວດສອບ KYC ກ່ອນຈ່າຍ
-  /// Returns true = ດຳເນີນການໄດ້, false = ຕ້ອງ KYC ກ່ອນ
+  // ── Gate ───────────────────────────────────────────────────
   Future<bool> checkAndGate({
     required BuildContext context,
     required double amount,
     required VoidCallback onKycCompleted,
   }) async {
-    if (amount <= kKycDailyLimit) return true; // ຍອດຕ່ຳ → ຜ່ານ
+    if (amount <= kKycDailyLimit) return true;
 
     final status = await getStatus();
 
-    if (status.isVerified) return true; // ✅ KYC ຜ່ານ → ຜ່ານ
+    if (!context.mounted) return false; // ✅ FIX (สำคัญมาก)
+
+    if (status.isVerified) return true;
 
     if (status.isSubmitted) {
-      _showSubmittedDialog(context); // ລໍ admin approve
+      _showSubmittedDialog(context);
       return false;
     }
 
-    // none / rejected → ນຳໄປ KYC
     _showKycSheet(context, amount: amount, onKycCompleted: onKycCompleted);
     return false;
   }
 
-  // ── Dialogs ────────────────────────────────────────────────────────────────
+  // ── Dialogs ────────────────────────────────────────────────
   void _showSubmittedDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -82,7 +82,10 @@ class KycGateService {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              HapticFeedback.lightImpact(); // ✅ UX ดีขึ้น
+              Navigator.of(context).pop();
+            },
             child: const Text(
               'ຮັບຊາບ',
               style: TextStyle(color: Color(0xFF1D9E75)),
@@ -102,31 +105,36 @@ class KycGateService {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _KycRequiredSheet(
+      builder: (sheetContext) => _KycRequiredSheet(
         amount: amount,
         onStartKyc: () {
-          Navigator.pop(context);
-          Navigator.pushNamed(
-            context,
-            '/kyc',
-            arguments: KycRouteArgs(onCompleted: onKycCompleted),
-          );
+          Navigator.of(sheetContext).pop();
+
+          Future.microtask(() {
+            if (!context.mounted) return;
+
+            Navigator.of(context).pushNamed(
+              '/kyc',
+              arguments: KycRouteArgs(onCompleted: onKycCompleted),
+            );
+          });
         },
       ),
     );
   }
 }
 
-// ─── Route Args ───────────────────────────────────────────────────────────────
+// ─── Route Args ───────────────────────────────────────────────
 class KycRouteArgs {
   final VoidCallback? onCompleted;
   const KycRouteArgs({this.onCompleted});
 }
 
-// ─── Bottom Sheet ─────────────────────────────────────────────────────────────
+// ─── Bottom Sheet ─────────────────────────────────────────────
 class _KycRequiredSheet extends StatelessWidget {
   final double amount;
   final VoidCallback onStartKyc;
+
   const _KycRequiredSheet({required this.amount, required this.onStartKyc});
 
   String _fmt(double v) =>
@@ -159,19 +167,19 @@ class _KycRequiredSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
+
             const Text(
               'ຕ້ອງຢືນຢັນຕົວຕົນ (KYC)',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A2420),
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
+
             _InfoRow('ຍອດທີ່ຈ່າຍ', _fmt(amount), warn: true),
             const SizedBox(height: 6),
             _InfoRow('ວົງເງິນໂດຍບໍ່ KYC', _fmt(kKycDailyLimit), warn: false),
+
             const SizedBox(height: 16),
+
             const Text(
               'ເມື່ອ KYC ຜ່ານ ທ່ານຈະໂອນໄດ້ໂດຍບໍ່ຈຳກັດ\nແລະ ບໍ່ຕ້ອງ KYC ອີກ',
               textAlign: TextAlign.center,
@@ -181,12 +189,17 @@ class _KycRequiredSheet extends StatelessWidget {
                 height: 1.6,
               ),
             ),
+
             const SizedBox(height: 22),
+
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: onStartKyc,
+                onPressed: () {
+                  HapticFeedback.lightImpact(); // ✅ UX
+                  onStartKyc();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1D9E75),
                   foregroundColor: Colors.white,
@@ -201,11 +214,16 @@ class _KycRequiredSheet extends StatelessWidget {
                 ),
               ),
             ),
+
             const SizedBox(height: 10),
+
             SizedBox(
               width: double.infinity,
               child: TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  HapticFeedback.selectionClick();
+                  Navigator.of(context).pop();
+                },
                 child: const Text(
                   'ຍົກເລີກ',
                   style: TextStyle(color: Color(0xFF7A8C87)),
@@ -219,9 +237,11 @@ class _KycRequiredSheet extends StatelessWidget {
   }
 }
 
+// ─── Info Row ────────────────────────────────────────────────
 class _InfoRow extends StatelessWidget {
   final String label, value;
   final bool warn;
+
   const _InfoRow(this.label, this.value, {required this.warn});
 
   @override
