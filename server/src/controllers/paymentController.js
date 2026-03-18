@@ -33,36 +33,48 @@ const getDailySpentLAK = async (userId) => {
 // ─── POST /api/payment/pay ────────────────────────────────────────────────────
 // ຈ່າຍເງິນ: ກວດ KYC → ກວດ limit → ດຶງ rate → ຕັດເງິນ
 
+// paymentController.js — pay()
+// ເພີ່ມ debug + ຮອງຮັບ amountless
 exports.pay = async (req, res) => {
     try {
-        const { paymentRequest, memo } = req.body;
+        const { paymentRequest, memo, amount } = req.body;
+
+        // ✅ Debug
+        console.log('📦 paymentRequest:', paymentRequest?.substring(0, 30));
+        console.log('📦 amount from client:', amount);
 
         if (!paymentRequest) {
             return res.status(400).json({ success: false, message: 'ກະລຸນາໃສ່ Lightning Invoice' });
         }
 
-        // ── 1. ດຶງ Wallet ──────────────────────────────────────────────────────
         const wallet = await Wallet.findOne({ user: req.user._id }).select('+adminKey');
-        if (!wallet) {
-            return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
-        }
+        if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        // ── 2. ກວດ KYC status ─────────────────────────────────────────────────
         const kyc = await KYC.findOne({ user: req.user._id });
         const isKYCVerified = kyc?.status === 'verified';
         const limit = isKYCVerified ? LIMIT.verified : LIMIT.unverified;
 
-        // ── 3. Decode invoice + ດຶງ real-time rate ────────────────────────────
         const [decoded, rate, balanceResult] = await Promise.all([
-            lnbits.decodeInvoice(paymentRequest),
+            lnbits.decodeInvoice(paymentRequest.trim()), // ✅ trim
             exchangeRate.getExchangeRate(),
             lnbits.getBalance(wallet.invoiceKey),
         ]);
 
-        const amountSats = decoded.amountSats;
-        const amountLAK  = await exchangeRate.convertSatsToLAK(amountSats);
+        // ✅ ຖ້າ amountless → ໃຊ້ amount ຈາກ Flutter
+        const amountSats = decoded.amountSats > 0
+            ? decoded.amountSats
+            : (parseInt(amount) || 0);
 
-        // ── 4. ກວດ limit per transaction ──────────────────────────────────────
+        if (amountSats <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ກະລຸນາລະບຸຈຳນວນ sats',
+            });
+        }
+
+        const amountLAK = await exchangeRate.convertSatsToLAK(amountSats);
+
+        // ── limit per tx ────────────────────────────────────────────────────
         if (amountLAK > limit.perTx) {
             return res.status(403).json({
                 success: false,
@@ -73,7 +85,7 @@ exports.pay = async (req, res) => {
             });
         }
 
-        // ── 5. ກວດ daily limit ─────────────────────────────────────────────────
+        // ── daily limit ─────────────────────────────────────────────────────
         const dailySpent = await getDailySpentLAK(req.user._id);
         if (dailySpent + amountLAK > limit.daily) {
             return res.status(403).json({
@@ -83,19 +95,22 @@ exports.pay = async (req, res) => {
             });
         }
 
-        // ── 6. ກວດ balance ─────────────────────────────────────────────────────
+        // ── balance ─────────────────────────────────────────────────────────
         if (balanceResult.balanceSats < amountSats) {
             return res.status(400).json({ success: false, message: 'ຍອດເງິນ sats ບໍ່ພໍ' });
         }
 
-        // ── 7. ຕັດເງິນ (pay invoice) ───────────────────────────────────────────
-        const payResult = await lnbits.payInvoice({ adminKey: wallet.adminKey, paymentRequest });
+        // ── pay ─────────────────────────────────────────────────────────────
+        const payResult = await lnbits.payInvoice({
+            adminKey: wallet.adminKey,
+            paymentRequest: paymentRequest.trim(), // ✅ trim
+        });
 
-        // ── 8. ອັບເດດ balance ──────────────────────────────────────────────────
+        // ── update balance ──────────────────────────────────────────────────
         wallet.balanceSats = balanceResult.balanceSats - amountSats - (payResult.feeSats || 0);
         await wallet.save();
 
-        // ── 9. ບັນທຶກ Transaction ──────────────────────────────────────────────
+        // ── save transaction ────────────────────────────────────────────────
         const transaction = await Transaction.create({
             user:   req.user._id,
             wallet: wallet._id,
@@ -105,7 +120,7 @@ exports.pay = async (req, res) => {
             amountLAK,
             feeSats:     payResult.feeSats || 0,
             paymentHash: payResult.paymentHash,
-            paymentRequest,
+            paymentRequest: paymentRequest.trim(),
             memo: memo || decoded.description || 'Payment',
             kycRequired: !isKYCVerified,
             kycVerified:  isKYCVerified,
@@ -134,9 +149,11 @@ exports.pay = async (req, res) => {
                 },
             },
         });
+
     } catch (error) {
         console.error('Pay Error:', error);
-        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
+        return res.status(500).json({ success: false, message: error.message });
+        //                                                        ↑ ✅ ສະແດງ error ຈິງໆ
     }
 };
 
@@ -159,15 +176,14 @@ exports.decodeInvoice = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            invoice: {
-                amountSats:  decoded.amountSats,
-                amountLAK,
-                description: decoded.description,
-                expiry:      decoded.expiry,
-                rate: {
-                    btcToLAK: rate.btcToLAK,
-                    btcToUSD: rate.btcToUSD,
-                },
+            // ✅ ເອົາ invoice key ອອກ — flat ໂດຍກົງ
+            amountSats:  decoded.amountSats,
+            amountLAK,
+            description: decoded.description,
+            expiry:      decoded.expiry,
+            rate: {
+                btcToLAK: rate.btcToLAK,
+                btcToUSD: rate.btcToUSD,
             },
         });
     } catch (error) {
