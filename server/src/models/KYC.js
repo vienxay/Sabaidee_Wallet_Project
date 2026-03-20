@@ -7,7 +7,7 @@ const kycSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
             required: true,
-            unique: true, // 1 user = 1 kyc document
+            unique: true,
             index: true,
         },
 
@@ -15,6 +15,7 @@ const kycSchema = new mongoose.Schema(
         fullName:       { type: String, required: true },
         gender:         { type: String, enum: ['M', 'F'], required: true },
         dob:            { type: Date,   required: true },
+        nationality:    { type: String, required: true }, // ✅ ເພີ່ມໃໝ່
         email:          { type: String, required: true },
 
         // ── Passport / ID ─────────────────────────────────────────────────────
@@ -23,9 +24,7 @@ const kycSchema = new mongoose.Schema(
 
         // ── ຮູບພາບ (Cloudinary URLs) ──────────────────────────────────────────
         idFrontUrl:     { type: String, required: true },
-        selfieUrl:      { type: String, required: true },
 
-        
         // ── Consent ───────────────────────────────────────────────────────────
         consentData:    { type: Boolean, required: true },
         consentPdpa:    { type: Boolean, default: false },

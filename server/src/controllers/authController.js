@@ -89,6 +89,7 @@ exports.login = async (req, res) => {
                 id: user._id, name: user.name, email: user.email,
                 profileImage: user.profileImage, // ✅
                 kycStatus: user.kycStatus,
+                role: user.role,
             },
         });
     } catch (error) {
@@ -109,6 +110,7 @@ exports.getMe = async (req, res) => {
                 kycStatus: user.kycStatus,
                 wallet: user.wallet,
                 createdAt: user.createdAt,
+                
             },
         });
     } catch (error) {

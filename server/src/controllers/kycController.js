@@ -17,54 +17,61 @@ const uploadToCloudinary = (buffer, folder) =>
 // POST /api/kyc/submit
 // ─────────────────────────────────────────────────────────────────────────────
 exports.submitKyc = async (req, res) => {
+    console.log('=== KYC Submit ===');       // ← ເພີ່ມ
+    console.log('body:', req.body);           // ← ເພີ່ມ
+    console.log('files:', req.files); 
     try {
         const userId = req.user._id;
 
+        // ✅ Query DB ສົດໆ ບໍ່ໃຊ້ req.user (ເພາະ token ອາດ cache ເກົ່າ)
+        const freshUser = await User.findById(userId).select('kycStatus');
+        if (!freshUser) {
+            return res.status(404).json({ success: false, message: 'ບໍ່ພົບ user' });
+        }
+
         // ── ກວດ duplicate ───────────────────────────────────────────────────
-        if (['pending', 'verified'].includes(req.user.kycStatus)) {
+        if (['pending', 'verified'].includes(freshUser.kycStatus)) {
             return res.status(409).json({
                 success: false,
-                message: req.user.kycStatus === 'verified'
+                message: freshUser.kycStatus === 'verified'
                     ? 'KYC ຂອງທ່ານຜ່ານການຢືນຢັນແລ້ວ'
                     : 'KYC ຂອງທ່ານກຳລັງຖືກກວດສອບຢູ່',
-                kycStatus: req.user.kycStatus,
+                kycStatus: freshUser.kycStatus,
             });
         }
 
         // ── Validate fields ─────────────────────────────────────────────────
         const {
-            fullName, dob, passportNumber, expiryDate, gender,
-             placeOfBirth,  isPep, 
-            consentData, consentPdpa,
+            fullName, dob, passportNumber, expiryDate,
+            gender, nationality, consentData,
         } = req.body;
 
-        if (!fullName || !dob || !passportNumber || !expiryDate || !gender) {
+        if (!fullName || !dob || !passportNumber || !expiryDate || !gender || !nationality) {
             return res.status(400).json({
                 success: false,
-                message: 'ຂໍ້ມູນບໍ່ຄົບ: fullName, dob, passportNumber, expiryDate, gender',
+                message: 'ຂໍ້ມູນບໍ່ຄົບ: fullName, dob, passportNumber, expiryDate, gender, nationality',
             });
         }
+
         if (consentData !== 'true') {
             return res.status(400).json({
                 success: false,
                 message: 'ຕ້ອງຍິນຍອມ consentData',
             });
         }
-        if (!req.files?.idFront?.[0] || !req.files?.selfie?.[0]) {
+
+        if (!req.files?.idFront?.[0]) {
             return res.status(400).json({
                 success: false,
-                message: 'ຕ້ອງອັບໂຫລດ idFront ແລະ selfie',
+                message: 'ຕ້ອງອັບໂຫລດຮູບ passport (idFront)',
             });
         }
 
         // ── Upload Cloudinary ───────────────────────────────────────────────
-        const uploadPromises = [
-            uploadToCloudinary(req.files.idFront[0].buffer, `kyc/${userId}/idFront`),
-            uploadToCloudinary(req.files.selfie[0].buffer,  `kyc/${userId}/selfie`),
-        ];
-        
-
-        const [frontResult, selfieResult, backResult] = await Promise.all(uploadPromises);
+        const frontResult = await uploadToCloudinary(
+            req.files.idFront[0].buffer,
+            `kyc/${userId}/idFront`
+        );
 
         // ── Save Kyc document ───────────────────────────────────────────────
         const referenceId = genRefId();
@@ -73,19 +80,17 @@ exports.submitKyc = async (req, res) => {
             fullName,
             gender,
             dob:            new Date(dob),
-            passportNumber: passportNumber.toUpperCase(),
-            nationality:    nationality  || 'null',
+            nationality,
             email:          req.user.email,
+            passportNumber: passportNumber.toUpperCase(),
             expiryDate:     new Date(expiryDate),
             idFrontUrl:     frontResult.secure_url,
-            selfieUrl:      selfieResult.secure_url,
-            isPep:          isPep === 'true',
             consentData:    true,
-            consentPdpa:    consentPdpa === 'true',
+            consentPdpa:    req.body.consentPdpa === 'true',
             referenceId,
             status:         'pending',
             submittedAt:    new Date(),
-        });  
+        });
 
         // ── Update User ─────────────────────────────────────────────────────
         await User.findByIdAndUpdate(userId, {
@@ -94,10 +99,9 @@ exports.submitKyc = async (req, res) => {
         });
 
         return res.status(201).json({
-            success:     true,
-            message:     'ສົ່ງ KYC ສຳເລັດ — ກຳລັງດຳເນີນການກວດສອບ',
-            referenceId,
-            kycStatus:   'pending',
+            success:   true,
+            message:   'ສົ່ງ KYC ສຳເລັດ — ກຳລັງດຳເນີນການກວດສອບ',
+            kycStatus: 'pending',
         });
 
     } catch (err) {
@@ -111,12 +115,11 @@ exports.submitKyc = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/kyc — ດຶງ status + ລາຍລະອຽດ
+// GET /api/kyc
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getMyKycStatus = async (req, res) => {
     try {
-        const kyc = await Kyc.findOne({ user: req.user._id })
-            .select('-__v');
+        const kyc = await Kyc.findOne({ user: req.user._id }).select('-__v');
 
         return res.json({
             success:   true,
@@ -144,7 +147,6 @@ exports.reviewKyc = async (req, res) => {
         const user = await User.findById(req.params.userId);
         if (!user) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ User' });
 
-        // ── Update Kyc document ─────────────────────────────────────────────
         await Kyc.findOneAndUpdate(
             { user: user._id },
             {
@@ -155,7 +157,6 @@ exports.reviewKyc = async (req, res) => {
             }
         );
 
-        // ── Update User kycStatus ───────────────────────────────────────────
         user.kycStatus = status;
         await user.save();
 
@@ -180,7 +181,9 @@ exports.reviewKyc = async (req, res) => {
 exports.listKyc = async (req, res) => {
     try {
         const { status, page = 1, limit = 20 } = req.query;
-        const filter = status ? { status } : { status: { $in: ['pending', 'verified', 'rejected'] } };
+        const filter = status
+            ? { status }
+            : { status: { $in: ['pending', 'verified', 'rejected'] } };
 
         const [kycs, total] = await Promise.all([
             Kyc.find(filter)

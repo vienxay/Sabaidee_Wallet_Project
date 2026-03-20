@@ -3,7 +3,7 @@ const express     = require('express');
 const router      = express.Router();
 const multer      = require('multer');
 const controller  = require('../controllers/kycController');
-const { protect, adminOnly } = require('../middleware/authMiddleware'); // ✅
+const { protect, adminOnly } = require('../middleware/authMiddleware');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -15,22 +15,21 @@ const upload = multer({
     },
     limits: { fileSize: 10 * 1024 * 1024 },
 }).fields([
-    { name: 'idFront', maxCount: 1 },
-    { name: 'selfie',  maxCount: 1 },
+    { name: 'idFront', maxCount: 1 }, // ✅ ລຶບ selfie ອອກ
 ]);
 
 // ── User routes ───────────────────────────────────────────────────────────────
-router.get('/',        protect,              controller.getMyKycStatus);
-router.post('/submit', protect, upload,      controller.submitKyc);
+router.get('/',        protect,         controller.getMyKycStatus);
+router.post('/submit', protect, upload, controller.submitKyc);
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
-router.put('/verify/:userId', protect, adminOnly, controller.reviewKyc); // ✅
-router.get('/list',           protect, adminOnly, controller.listKyc);   // ✅
+router.put('/verify/:userId', protect, adminOnly, controller.reviewKyc);
+router.get('/list',           protect, adminOnly, controller.listKyc);
 
 // ── Dev only ──────────────────────────────────────────────────────────────────
-// kycRoutes.js — dev reset
 if (process.env.NODE_ENV === 'development') {
-    const Kyc = require('../models/Kyc');
+    const Kyc  = require('../models/Kyc');
+    const User = require('../models/User'); // ✅ ແກ້ bug: ເພີ່ມ import User
     router.delete('/reset', protect, async (req, res) => {
         await Kyc.deleteOne({ user: req.user._id });
         await User.findByIdAndUpdate(req.user._id, {
