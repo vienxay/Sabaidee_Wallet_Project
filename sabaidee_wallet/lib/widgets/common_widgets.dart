@@ -44,6 +44,7 @@ class SectionCard extends StatelessWidget {
 // ─── KYC Text Field ───────────────────────────────────────────────────────────
 class KycTextField extends StatelessWidget {
   final String label;
+  final String? hint;
   final TextEditingController controller;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? formatters;
@@ -53,6 +54,7 @@ class KycTextField extends StatelessWidget {
   const KycTextField({
     super.key,
     required this.label,
+    this.hint,
     required this.controller,
     this.keyboardType,
     this.formatters,
@@ -94,6 +96,8 @@ class KycTextField extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
           decoration: InputDecoration(
+            hintText: hint, // ✅ ເພີ່ມ
+            hintStyle: const TextStyle(color: AppColors.kMuted, fontSize: 14),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 13,
