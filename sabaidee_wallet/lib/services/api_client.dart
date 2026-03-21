@@ -1,115 +1,110 @@
+// lib/services/api_client.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../core/core.dart';
+import '../core/app_constants.dart';
+import 'storage_service.dart'; // ✅ import ໃຫ້ຖືກຕ້ອງ
 
-/// ──────────────────────────────────────────────────────────────────────────────
-/// Base HTTP client — inject token ອັດຕະໂນມັດ + handle errors
-/// ──────────────────────────────────────────────────────────────────────────────
+class ApiResponse {
+  final bool success;
+  final dynamic data;
+  final String message;
+  final int? statusCode;
+
+  ApiResponse({
+    required this.success,
+    this.data,
+    this.message = '',
+    this.statusCode,
+  });
+}
+
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
-  final String _base = AppConstants.apiBaseUrl;
-
-  // ─── Headers ────────────────────────────────────────────────────────────────
-  Future<Map<String, String>> _headers({bool auth = true}) async {
-    final headers = {'Content-Type': 'application/json'};
-    if (auth) {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(AppConstants.tokenKey);
-      if (token != null) headers['Authorization'] = 'Bearer $token';
-    }
-    return headers;
+  // ✅ ດຶງ headers ພ້ອມ token
+  Future<Map<String, String>> _headers() async {
+    final token = await StorageService.instance.getToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token != null ? 'Bearer $token' : '',
+      'ngrok-skip-browser-warning': 'true',
+    };
   }
 
-  // ─── GET ────────────────────────────────────────────────────────────────────
-  Future<ApiResponse> get(String path, {bool auth = true}) async {
+  // ✅ GET request
+  Future<ApiResponse> get(String path) async {
     try {
-      final res = await http
-          .get(Uri.parse('$_base$path'), headers: await _headers(auth: auth))
-          .timeout(const Duration(milliseconds: AppConstants.receiveTimeoutMs));
-      return _parse(res);
+      final response = await http.get(
+        Uri.parse('${AppConstants.apiBaseUrl}$path'),
+        headers: await _headers(),
+      );
+
+      // ✅ Handle 401
+      if (response.statusCode == 401) {
+        await StorageService.instance.clearAll();
+        return ApiResponse(
+          success: false,
+          message: 'Session ໝົດອາຍຸ ກະລຸນາ login ໃໝ່',
+          statusCode: 401,
+        );
+      }
+
+      return _handleResponse(response);
     } catch (e) {
-      return ApiResponse.networkError(e.toString());
+      return ApiResponse(success: false, message: e.toString());
     }
   }
 
-  // ─── POST ───────────────────────────────────────────────────────────────────
+  // ✅ POST request
   Future<ApiResponse> post(
     String path,
     Map<String, dynamic> body, {
     bool auth = true,
   }) async {
     try {
-      final res = await http
-          .post(
-            Uri.parse('$_base$path'),
-            headers: await _headers(auth: auth),
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(milliseconds: AppConstants.receiveTimeoutMs));
-      return _parse(res);
-    } catch (e) {
-      return ApiResponse.networkError(e.toString());
-    }
-  }
+      final headers = await _headers();
+      if (!auth) {
+        headers.remove('Authorization');
+      }
 
-  // ─── PUT ────────────────────────────────────────────────────────────────────
-  Future<ApiResponse> put(String path, Map<String, dynamic> body) async {
-    try {
-      final res = await http
-          .put(
-            Uri.parse('$_base$path'),
-            headers: await _headers(),
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(milliseconds: AppConstants.receiveTimeoutMs));
-      return _parse(res);
-    } catch (e) {
-      return ApiResponse.networkError(e.toString());
-    }
-  }
-
-  // ─── Parse ──────────────────────────────────────────────────────────────────
-  ApiResponse _parse(http.Response res) {
-    try {
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      return ApiResponse(
-        statusCode: res.statusCode,
-        success: data['success'] == true,
-        data: data,
-        message: data['message'] as String? ?? '',
+      final response = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}$path'),
+        headers: headers,
+        body: jsonEncode(body),
       );
-    } catch (_) {
+
+      if (response.statusCode == 401 && auth) {
+        await StorageService.instance.clearAll();
+        return ApiResponse(
+          success: false,
+          message: 'Session ໝົດອາຍຸ ກະລຸນາ login ໃໝ່',
+          statusCode: 401,
+        );
+      }
+
+      return _handleResponse(response);
+    } catch (e) {
+      return ApiResponse(success: false, message: e.toString());
+    }
+  }
+
+  // ✅ Handle response (private method)
+  ApiResponse _handleResponse(http.Response response) {
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
       return ApiResponse(
-        statusCode: res.statusCode,
+        success: response.statusCode >= 200 && response.statusCode < 300,
+        data: body,
+        message: body['message'] ?? '',
+        statusCode: response.statusCode,
+      );
+    } catch (e) {
+      return ApiResponse(
         success: false,
-        message: 'ບໍ່ສາມາດອ່ານຂໍ້ມູນໄດ້',
+        message: 'Invalid response format',
+        statusCode: response.statusCode,
       );
     }
   }
-}
-
-/// Wrapper ສຳລັບ response ທຸກ endpoint
-class ApiResponse {
-  final int statusCode;
-  final bool success;
-  final Map<String, dynamic>? data;
-  final String message;
-
-  const ApiResponse({
-    required this.statusCode,
-    required this.success,
-    this.data,
-    this.message = '',
-  });
-
-  factory ApiResponse.networkError(String msg) => ApiResponse(
-    statusCode: 0,
-    success: false,
-    message: 'Network error: $msg',
-  );
-
-  bool get isUnauthorized => statusCode == 401;
 }

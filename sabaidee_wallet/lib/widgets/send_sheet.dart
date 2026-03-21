@@ -1,10 +1,16 @@
+// ─── send_sheet.dart ─────────────────────────────────────────────────────────
+// ໜ້າຈໍຫຼັກສຳລັບການສົ່ງເງິນ
+// ຈັດການ: QR detection, Lightning invoice input, Lightning confirm
+
 import 'package:flutter/material.dart';
 import '../core/core.dart';
 import '../models/app_models.dart';
 import '../services/payment_service.dart';
-import 'payment_success_sheet.dart';
+import '../features/payment/payment_success_screen.dart';
+import '../features/scanner/lao_qr_pay_sheet.dart';
+import '../features/scanner/qr_utils.dart';
 import '../features/scanner/qr_scanner_screen.dart';
-import '../features/payment/payment_error_dialog.dart'; // ✅ import
+import '../features/payment/payment_error_dialog.dart';
 
 class SendSheet extends StatefulWidget {
   final WalletModel? wallet;
@@ -12,20 +18,20 @@ class SendSheet extends StatefulWidget {
   final VoidCallback? onSuccess;
 
   const SendSheet({super.key, this.wallet, this.invoice, this.onSuccess});
+
   @override
   State<SendSheet> createState() => _SendSheetState();
 }
 
 class _SendSheetState extends State<SendSheet> {
   final _invoiceCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
   final _amountSatsCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
   bool _loading = false;
-  String? _error; // ✅ ໃຊ້ສຳລັບ decode error ເທົ່ານັ້ນ
+  String? _error;
   DecodedInvoiceModel? _decoded;
+  LaoQRInfo? _laoQRInfo;
   bool _showBTC = true;
 
   @override
@@ -33,24 +39,40 @@ class _SendSheetState extends State<SendSheet> {
     super.initState();
     if (widget.invoice != null) {
       _invoiceCtrl.text = widget.invoice!;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _decode());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _handleRawInput(widget.invoice!),
+      );
     }
   }
 
   @override
   void dispose() {
     _invoiceCtrl.dispose();
-    _noteCtrl.dispose();
-    _amountCtrl.dispose();
     _amountSatsCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
 
-  // ─── Decode ────────────────────────────────────────────────────────────────
-  Future<void> _decode() async {
-    final raw = _invoiceCtrl.text.trim();
-    if (raw.isEmpty) {
+  // ─── ກວດສອບປະເພດ QR ─────────────────────────────────────────────────────
+  Future<void> _handleRawInput(String raw) async {
+    if (raw.trim().isEmpty) return;
+    switch (detectQRType(raw.trim())) {
+      case QRType.lightning:
+        await _decode(raw);
+      case QRType.laoQR:
+        setState(() {
+          _laoQRInfo = LaoQRInfo.fromRaw(raw.trim());
+          _error = null;
+        });
+      case QRType.unknown:
+        await _decode(raw);
+    }
+  }
+
+  // ─── Decode Lightning Invoice ─────────────────────────────────────────────
+  Future<void> _decode([String? raw]) async {
+    final input = (raw ?? _invoiceCtrl.text).trim();
+    if (input.isEmpty) {
       setState(() => _error = 'ກະລຸນາໃສ່ Lightning Invoice');
       return;
     }
@@ -59,26 +81,23 @@ class _SendSheetState extends State<SendSheet> {
       _error = null;
     });
 
-    final res = await PaymentService.instance.decodeInvoice(raw);
+    final res = await PaymentService.instance.decodeInvoice(input);
 
     if (!mounted) return;
-    if (res.success) {
-      setState(() {
-        _loading = false;
+    setState(() {
+      _loading = false;
+      if (res.success) {
         _decoded = res.data;
         if (res.data != null && res.data!.amountSats > 0) {
           _amountSatsCtrl.text = res.data!.amountSats.toString();
         }
-      });
-    } else {
-      setState(() {
-        _loading = false;
+      } else {
         _error = res.message;
-      });
-    }
+      }
+    });
   }
 
-  // ─── Pay ✅ ແກ້ໃຫ້ Dialog ───────────────────────────────────────────────────
+  // ─── Pay Lightning ────────────────────────────────────────────────────────
   Future<void> _pay() async {
     if (_decoded == null) return;
 
@@ -88,7 +107,6 @@ class _SendSheetState extends State<SendSheet> {
       return;
     }
 
-    // ✅ ເກັບ navigator ກ່ອນ await
     final rootNav = Navigator.of(context, rootNavigator: true);
     final localNav = Navigator.of(context);
 
@@ -107,7 +125,6 @@ class _SendSheetState extends State<SendSheet> {
     setState(() => _loading = false);
 
     if (res.success) {
-      // ── ✅ ສຳເລັດ ─────────────────────────────────────────────────────────
       localNav.pop();
       widget.onSuccess?.call();
       showModalBottomSheet(
@@ -124,172 +141,224 @@ class _SendSheetState extends State<SendSheet> {
         ),
       );
     } else {
-      // ── ✅ Error → Dialog ກາງຈໍ (ບໍ່ inline) ─────────────────────────────
-      localNav.pop(); // ປິດ bottom sheet ກ່ອນ
-
+      localNav.pop();
       await PaymentErrorDialog.show(
         rootNav.context,
         errorInfo: PaymentErrorInfo.fromApiResponse({
           'message': res.message,
           'requireKYC': res.requireKYC,
         }),
-        onRetry: () {
-          // ເປີດ sheet ຄືນໃໝ່
-          showModalBottomSheet(
-            context: rootNav.context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => SendSheet(
-              wallet: widget.wallet,
-              invoice: widget.invoice,
-              onSuccess: widget.onSuccess,
-            ),
-          );
-        },
+        onRetry: () => showModalBottomSheet(
+          context: rootNav.context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => SendSheet(
+            wallet: widget.wallet,
+            invoice: widget.invoice,
+            onSuccess: widget.onSuccess,
+          ),
+        ),
         onGoToKYC: () => rootNav.pushNamed('/kyc'),
       );
     }
   }
 
-  // ─── Scan QR ───────────────────────────────────────────────────────────────
+  // ─── Scan QR ──────────────────────────────────────────────────────────────
   Future<void> _scanQR() async {
     final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => const QrScannerScreen(title: 'ສະແກນ Lightning Invoice'),
+        builder: (_) => const QrScannerScreen(title: 'ສະແກນ QR'),
       ),
     );
     if (result != null && result.isNotEmpty) {
+      _reset(keepInput: true);
       _invoiceCtrl.text = result;
-      await _decode();
+      await _handleRawInput(result);
     }
   }
 
-  // ─── Reset ─────────────────────────────────────────────────────────────────
-  void _reset() => setState(() {
+  // ─── Reset ────────────────────────────────────────────────────────────────
+  void _reset({bool keepInput = false}) => setState(() {
     _decoded = null;
+    _laoQRInfo = null;
     _error = null;
-    _invoiceCtrl.clear();
-    _noteCtrl.clear();
-    _amountCtrl.clear();
     _amountSatsCtrl.clear();
     _descCtrl.clear();
+    if (!keepInput) _invoiceCtrl.clear();
   });
 
-  String get _convertedAmountFromInput {
+  String get _convertedAmount {
     final sats = int.tryParse(_amountSatsCtrl.text.trim()) ?? 0;
     if (sats == 0) return '';
-    final btc = sats / 100000000;
     if (_showBTC) {
       final lakRate = (_decoded?.amountSats ?? 0) > 0
           ? (_decoded!.amountLAK / _decoded!.amountSats)
           : 0.0;
-      final estimatedLAK = lakRate > 0 ? (sats * lakRate).round() : 0;
-      return estimatedLAK > 0 ? 'about $estimatedLAK LAK' : '';
-    } else {
-      return '${btc.toStringAsFixed(8)} BTC';
+      final estimated = lakRate > 0 ? (sats * lakRate).round() : 0;
+      return estimated > 0 ? 'about $estimated LAK' : '';
     }
+    return '${(sats / 100000000).toStringAsFixed(8)} BTC';
   }
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
+  // ─── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    if (_loading && _decoded == null) {
-      return Container(
-        height: 200,
-        decoration: const BoxDecoration(
-          color: Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(color: Color(0xFFFFB300)),
-        ),
+    if (_loading && _decoded == null && _laoQRInfo == null) {
+      return _buildLoading();
+    }
+    // LAO QR → delegate ໄປ LaoQRPaySheet
+    if (_laoQRInfo != null) {
+      return LaoQRPaySheet(
+        qrInfo: _laoQRInfo!,
+        wallet: widget.wallet,
+        onSuccess: widget.onSuccess,
+        onCancel: _reset,
       );
     }
-    if (_decoded == null) return _buildInvoiceInput();
-    return _buildConfirmScreen();
+    if (_decoded != null) return _buildConfirmScreen();
+    return _buildInvoiceInput();
   }
 
-  Widget _buildInvoiceInput() {
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildLoading() => Container(
+    height: 200,
+    decoration: const BoxDecoration(
+      color: Color(0xFF1A1A1A),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    child: const Center(
+      child: CircularProgressIndicator(color: Color(0xFFFFB300)),
+    ),
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildInvoiceInput() => Container(
+    margin: const EdgeInsets.all(12),
+    padding: EdgeInsets.only(
+      left: 20,
+      right: 20,
+      top: 20,
+      bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+    ),
+    decoration: BoxDecoration(
+      color: AppColors.background,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(2),
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _invoiceCtrl,
-            maxLines: 3,
-            style: const TextStyle(fontSize: 13),
-            decoration: InputDecoration(
-              hintText: 'ວາງ Lightning Invoice (lnbc...)',
-              hintStyle: const TextStyle(
-                color: AppColors.textGrey,
-                fontSize: 13,
+        ),
+        const SizedBox(height: 20),
+
+        // ── ປຸ່ມສະແກນໃຫຍ່ ──
+        GestureDetector(
+          onTap: _scanQR,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            decoration: BoxDecoration(
+              color: AppColors.inputBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.4),
+                width: 1.5,
               ),
-              filled: true,
-              fillColor: AppColors.inputBackground,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              prefixIcon: const Icon(Icons.bolt, color: AppColors.primary),
-              suffixIcon: IconButton(
-                icon: const Icon(
+            ),
+            child: Column(
+              children: [
+                const Icon(
                   Icons.qr_code_scanner,
                   color: AppColors.primary,
+                  size: 40,
                 ),
-                onPressed: _scanQR,
-              ),
-              errorText: _error,
+                const SizedBox(height: 8),
+                const Text(
+                  'ສະແກນ QR',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'LAO QR • Lightning Invoice',
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _decode,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Decode',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+        const SizedBox(height: 16),
 
+        const Row(
+          children: [
+            Expanded(child: Divider(color: Colors.grey)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text('ຫຼື', style: TextStyle(color: Colors.grey)),
+            ),
+            Expanded(child: Divider(color: Colors.grey)),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        TextField(
+          controller: _invoiceCtrl,
+          maxLines: 3,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: 'ວາງ Lightning Invoice (lnbc...)',
+            hintStyle: const TextStyle(color: AppColors.textGrey, fontSize: 13),
+            filled: true,
+            fillColor: AppColors.inputBackground,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            prefixIcon: const Icon(Icons.bolt, color: AppColors.primary),
+            errorText: _error,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _loading
+                ? null
+                : () => _handleRawInput(_invoiceCtrl.text),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Decode / ຕໍ່ໄປ',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
   Widget _buildConfirmScreen() {
     final lak = widget.wallet?.balanceLAK ?? 0;
     final isAmountless = _decoded!.amountSats == 0;
@@ -307,12 +376,14 @@ class _SendSheetState extends State<SendSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[700],
-                borderRadius: BorderRadius.circular(2),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[700],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -380,7 +451,7 @@ class _SendSheetState extends State<SendSheet> {
                               )
                             : null,
                       ),
-                      onChanged: (v) => setState(() {}),
+                      onChanged: (_) => setState(() {}),
                     ),
                     GestureDetector(
                       onTap: () => setState(() => _showBTC = !_showBTC),
@@ -406,7 +477,7 @@ class _SendSheetState extends State<SendSheet> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _convertedAmountFromInput,
+                      _convertedAmount,
                       style: const TextStyle(
                         color: Colors.white38,
                         fontSize: 13,
@@ -451,8 +522,6 @@ class _SendSheetState extends State<SendSheet> {
                 style: const TextStyle(color: Colors.white38, fontSize: 13),
               ),
             ),
-
-            // ✅ ລຶບ inline error text ອອກໝົດ — ໃຊ້ Dialog ແທນ
             const SizedBox(height: 24),
 
             Padding(

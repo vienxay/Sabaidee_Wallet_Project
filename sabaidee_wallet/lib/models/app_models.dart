@@ -1,3 +1,6 @@
+// lib/models/app_models.dart
+// Source of Truth - ມີ Model ທັງໝົດ
+
 // ─── User Model ───────────────────────────────────────────────────────────────
 class UserModel {
   final String id;
@@ -93,8 +96,8 @@ class RateModel {
 // ─── Transaction Model ────────────────────────────────────────────────────────
 class TransactionModel {
   final String id;
-  final String type; // topup | withdraw | pay | receive
-  final String status; // pending | success | failed
+  final String type;
+  final String status;
   final int amountSats;
   final int amountLAK;
   final int feeSats;

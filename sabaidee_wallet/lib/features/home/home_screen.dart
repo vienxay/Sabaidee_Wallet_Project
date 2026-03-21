@@ -1,7 +1,9 @@
+// lib/features/home/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/core.dart';
-import '../../models/app_models.dart';
+import '../../models/app_models.dart'; // ✅ ໃຊ້ app_models.dart (source of truth)
+// import '../../models/user_model.dart';  // ✗ ລົບອັນນີ້
 import '../../services/wallet_service.dart';
 import '../../services/transaction_service.dart';
 import '../../services/auth_service.dart';
@@ -33,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ─── Data State ───────────────────────────────────────────────────────────
   bool _loading = true;
-  UserModel? _user; // ✅ ເພີ່ມ user
+  UserModel? _user;
   WalletModel? _wallet;
   List<TransactionModel> _recentTx = [];
   String? _error;
@@ -52,7 +54,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
 
-    // ✅ ດຶງຂໍ້ມູນທັງ 3 ພ້ອມກັນ
     final results = await Future.wait([
       AuthService.instance.getMe(),
       WalletService.instance.getWallet(),
@@ -143,7 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ✅ ສົ່ງ user ໄປ HomeTopBar
         HomeTopBar(scaffoldKey: _scaffoldKey, user: _user),
         const SizedBox(height: 12),
 
@@ -178,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => ReceiveSheet(wallet: _wallet),
     );
-    // ✅ refresh ຖ້າ TopUp ສຳເລັດ
     if (result == true && mounted) _loadData();
   }
 

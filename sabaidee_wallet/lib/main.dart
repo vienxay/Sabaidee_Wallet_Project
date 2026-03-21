@@ -15,6 +15,8 @@ import 'features/kyc/kyc_screen.dart'; // ✅ ໃໝ່
 import 'services/auth_service.dart';
 import 'services/storage_service.dart';
 import 'services/kyc_gate_service.dart'; // ✅ ໃໝ່
+import 'package:app_links/app_links.dart';
+import 'dart:async';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,18 +45,72 @@ void main() async {
   runApp(SabaideeWallet(isLoggedIn: isLoggedIn));
 }
 
-class SabaideeWallet extends StatelessWidget {
+class SabaideeWallet extends StatefulWidget {
   final bool isLoggedIn;
   const SabaideeWallet({super.key, required this.isLoggedIn});
 
+  @override
+  State<SabaideeWallet> createState() => _SabaideeWalletState();
+}
+
+class _SabaideeWalletState extends State<SabaideeWallet> {
+  final _appLinks = AppLinks();
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription? _linkSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    // ✅ ຮັບ link ຕອນ app ເປີດຈາກ background
+    final initialLink = await _appLinks.getInitialLink();
+    if (initialLink != null) {
+      _handleLink(initialLink);
+    }
+
+    // ✅ ຮັບ link ຂະນະ app ເປີດຢູ່
+    _linkSub = _appLinks.uriLinkStream.listen((uri) {
+      _handleLink(uri);
+    });
+  }
+
+  void _handleLink(Uri uri) {
+    if (uri.scheme != 'sabaidee') return;
+
+    switch (uri.host) {
+      case 'home':
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/home',
+          (route) => false,
+        );
+        break;
+      case 'kyc':
+        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/kyc',
+          (route) => false,
+        );
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
+
   Widget get _initialScreen =>
-      isLoggedIn ? const HomeScreen() : const WelcomeScreen();
+      widget.isLoggedIn ? const HomeScreen() : const WelcomeScreen();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Sabaidee Wallet',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey, // ✅ ສຳຄັນ
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
@@ -69,7 +125,7 @@ class SabaideeWallet extends StatelessWidget {
         '/otp-verification': (_) => const OtpVerificationScreen(),
         '/reset-password': (_) => const ResetPasswordScreen(),
         '/home': (_) => const HomeScreen(),
-        '/kyc': (_) => const KycScreen(), // ✅ ໃໝ່
+        '/kyc': (_) => const KycScreen(),
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
       },
       onUnknownRoute: (settings) =>

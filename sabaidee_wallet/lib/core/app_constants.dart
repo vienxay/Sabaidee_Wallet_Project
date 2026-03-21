@@ -8,10 +8,13 @@ class AppConstants {
   // flutter run --dart-define=API_BASE_URL=https://api.example.com
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3000', // Android Emulator → localhost
+
+    // defaultValue: 'http://10.0.2.2:3000', // Android Emulator → localhost
+    // defaultValue: 'http://172.28.103.68:3000',
+
     // ngrok test
-    // defaultValue:
-    //     'https://unpluralized-membranophonic-saniya.ngrok-free.dev', // ✅ ວາງ URL ngrok ຂອງທ່ານ
+    defaultValue:
+        'https://unpluralized-membranophonic-saniya.ngrok-free.dev', // ✅ ວາງ URL ngrok ຂອງທ່ານ
   );
 
   // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -39,6 +42,10 @@ class AppConstants {
   // ─── Payment ─────────────────────────────────────────────────────────────────
   static const String paymentPay = '/api/payment/pay';
   static const String paymentDecode = '/api/payment/decode';
+  static const paymentLaoQR = '/api/payment/laoqr/pay';
+  static const paymentLaoQRLimit = '/api/payment/laoqr/limit-status';
+  static const paymentTransfer = '/api/payment/transfer';
+  static const paymentTransferLookup = '/api/payment/transfer/lookup';
 
   // ─── Transactions ─────────────────────────────────────────────────────────────
   static const String transactions = '/api/transactions';

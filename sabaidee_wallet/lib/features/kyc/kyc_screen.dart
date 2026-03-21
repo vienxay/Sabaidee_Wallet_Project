@@ -344,7 +344,7 @@ class _KycScreenState extends State<KycScreen> {
                       }
                     : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF5A623), // Orange ຕາມ design
+                  backgroundColor: const Color(0xFFF5A623),
                   disabledBackgroundColor: const Color(
                     0xFFF5A623,
                   ).withValues(alpha: 0.4),
@@ -421,9 +421,10 @@ class _GenderDropdown extends StatelessWidget {
           dropdownColor: AppColors.kCard,
           style: const TextStyle(color: AppColors.kText, fontSize: 14),
           items: const [
-            DropdownMenuItem(value: 'male', child: Text('Male')),
-            DropdownMenuItem(value: 'female', child: Text('Female')),
-            DropdownMenuItem(value: 'other', child: Text('Other')),
+            // ✅ FIX: ສົ່ງ 'M' / 'F' ຕົງກັບ backend enum ['M', 'F']
+            DropdownMenuItem(value: 'M', child: Text('Male')),
+            DropdownMenuItem(value: 'F', child: Text('Female')),
+            // ✅ FIX: ລຶບ 'other' ອອກ — backend ບໍ່ຮັບ
           ],
           onChanged: onChanged,
         ),
@@ -501,7 +502,6 @@ class _PassportScanBox extends StatelessWidget {
           border: Border.all(
             color: file != null ? AppColors.kGreen : const Color(0xFFF5A623),
             width: 1.5,
-            style: BorderStyle.solid, // dashed via CustomPainter ຖ້າຢາກ
           ),
         ),
         child: file != null

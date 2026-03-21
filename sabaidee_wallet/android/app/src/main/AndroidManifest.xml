@@ -32,6 +32,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
+            <!-- ✅ Google Auth callback - ເກົ່າ (ເກັບໄວ້) -->
             <intent-filter android:label="google_callback">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -39,6 +40,26 @@
                 <data
                     android:scheme="sabaidee"
                     android:host="auth"/>
+            </intent-filter>
+
+            <!-- ✅ ເພີ່ມໃໝ່: KYC approved → ໄປໜ້າ home -->
+            <intent-filter android:label="kyc_approved">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="sabaidee"
+                    android:host="home"/>
+            </intent-filter>
+
+            <!-- ✅ ເພີ່ມໃໝ່: KYC rejected → ໄປໜ້າ kyc -->
+            <intent-filter android:label="kyc_resubmit">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="sabaidee"
+                    android:host="kyc"/>
             </intent-filter>
 
         </activity>

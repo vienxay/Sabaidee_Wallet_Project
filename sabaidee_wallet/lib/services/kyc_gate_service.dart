@@ -1,5 +1,4 @@
 // lib/services/kyc_gate_service.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/kyc_status.dart';
@@ -7,7 +6,7 @@ import 'kyc_service.dart';
 import 'storage_service.dart';
 
 const double kKycDailyLimit = 5_000_000;
-const _kStatus = 'user_kyc_status_v1'; // ✅ safer key
+const _kStatus = 'user_kyc_status_v1';
 
 class KycGateService {
   KycGateService._();
@@ -29,9 +28,10 @@ class KycGateService {
     final res = await KycService.checkMyStatus();
 
     if (res['success'] == true) {
-      final statusStr = res['status'] as String?; // ✅ FIX
-      if (statusStr != null) {
-        await saveStatus(KycStatusX.fromString(statusStr));
+      // ✅ FIX: ໃຊ້ 'kycStatus' (String) ແທນ 'status' (KycStatus enum)
+      final rawStatus = res['kycStatus'] as String?;
+      if (rawStatus != null) {
+        await saveStatus(KycStatusX.fromString(rawStatus));
       }
     }
   }
@@ -46,7 +46,7 @@ class KycGateService {
 
     final status = await getStatus();
 
-    if (!context.mounted) return false; // ✅ FIX (สำคัญมาก)
+    if (!context.mounted) return false;
 
     if (status.isVerified) return true;
 
@@ -83,7 +83,7 @@ class KycGateService {
         actions: [
           TextButton(
             onPressed: () {
-              HapticFeedback.lightImpact(); // ✅ UX ดีขึ้น
+              HapticFeedback.lightImpact();
               Navigator.of(context).pop();
             },
             child: const Text(
@@ -109,10 +109,8 @@ class KycGateService {
         amount: amount,
         onStartKyc: () {
           Navigator.of(sheetContext).pop();
-
           Future.microtask(() {
             if (!context.mounted) return;
-
             Navigator.of(context).pushNamed(
               '/kyc',
               arguments: KycRouteArgs(onCompleted: onKycCompleted),
@@ -167,19 +165,15 @@ class _KycRequiredSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-
             const Text(
               'ຕ້ອງຢືນຢັນຕົວຕົນ (KYC)',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
-
             _InfoRow('ຍອດທີ່ຈ່າຍ', _fmt(amount), warn: true),
             const SizedBox(height: 6),
             _InfoRow('ວົງເງິນໂດຍບໍ່ KYC', _fmt(kKycDailyLimit), warn: false),
-
             const SizedBox(height: 16),
-
             const Text(
               'ເມື່ອ KYC ຜ່ານ ທ່ານຈະໂອນໄດ້ໂດຍບໍ່ຈຳກັດ\nແລະ ບໍ່ຕ້ອງ KYC ອີກ',
               textAlign: TextAlign.center,
@@ -189,15 +183,13 @@ class _KycRequiredSheet extends StatelessWidget {
                 height: 1.6,
               ),
             ),
-
             const SizedBox(height: 22),
-
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
                 onPressed: () {
-                  HapticFeedback.lightImpact(); // ✅ UX
+                  HapticFeedback.lightImpact();
                   onStartKyc();
                 },
                 style: ElevatedButton.styleFrom(
@@ -214,9 +206,7 @@ class _KycRequiredSheet extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
-
             SizedBox(
               width: double.infinity,
               child: TextButton(

@@ -1,8 +1,10 @@
+// lib/services/auth_service.dart
+// lib/services/auth_service.dart
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../core/core.dart';
+import '../core/app_constants.dart';
 import '../models/app_models.dart';
 import 'api_client.dart';
+import 'storage_service.dart';
 
 class AuthService {
   AuthService._();
@@ -10,9 +12,17 @@ class AuthService {
 
   final _api = ApiClient.instance;
 
+  // ✅ ດຶງ token (public method)
+  Future<String?> getToken() async {
+    return StorageService.instance.getToken();
+  }
+
+  // ແທນທີ່ _token() ເກົ່າ
+  Future<String?> _token() async => getToken();
+
   // ─── Register ──────────────────────────────────────────────────────────────
   Future<AuthResult> register({
-    required String walletName, // ✅ ປ່ຽນຈາກ name → walletName ໃຫ້ຊັດເຈນ
+    required String walletName,
     required String email,
     required String password,
   }) async {
@@ -23,12 +33,9 @@ class AuthService {
     }, auth: false);
 
     if (res.success && res.data != null) {
-      // ✅ Register ສຳເລັດ → ບໍ່ຕ້ອງ Save Session ຍ້ອນ Navigate ໄປ /login ຢູ່ດີ
-      // await _saveSession(res.data!); ← ລຶບອອກ
       return AuthResult.success(UserModel.fromJson(res.data!['user']));
     }
 
-    // ✅ ແກ້ຫຼັກ: Throw Exception ບໍ່ແມ່ນ String
     throw Exception(
       res.message.isNotEmpty ? res.message : 'ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່',
     );
@@ -49,7 +56,6 @@ class AuthService {
       return AuthResult.success(UserModel.fromJson(res.data!['user']));
     }
 
-    // ✅ ສອດຄ່ອງກັນ: Login ກໍ Throw ເໝືອນກັນ
     throw Exception(
       res.message.isNotEmpty ? res.message : 'ອີເມວ ຫຼື ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ',
     );
@@ -57,38 +63,79 @@ class AuthService {
 
   // ─── isLoggedIn ─────────────────────────────────────────────────────────────
   Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(AppConstants.tokenKey);
-    if (token == null) return false;
+    final token = await StorageService.instance.getToken();
 
-    // ✅ ກວດ JWT Expiry ໂດຍບໍ່ຕ້ອງ Call API
+    if (token == null || token.isEmpty) return false;
+
     try {
       final parts = token.split('.');
-      if (parts.length != 3) return false;
+      if (parts.length != 3) {
+        await StorageService.instance.clearAll();
+        return false;
+      }
 
-      // Decode Payload (Base64)
       final payload = jsonDecode(
         utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
       );
 
       final exp = payload['exp'] as int?;
-      if (exp == null) return false;
+      if (exp == null) {
+        await StorageService.instance.clearAll();
+        return false;
+      }
 
-      // ✅ ກວດວ່າ Token ຍັງບໍ່ໝົດອາຍຸ
       final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-      return DateTime.now().isBefore(expiry);
+      if (DateTime.now().isAfter(expiry)) {
+        await StorageService.instance.clearAll();
+        return false;
+      }
     } catch (_) {
-      return false; // Token ຮູບແບບຜິດ → ຖືວ່າ Logged Out
+      await StorageService.instance.clearAll();
+      return false;
+    }
+
+    try {
+      final res = await _api.get(AppConstants.authMe);
+      if (res.success) return true;
+      await StorageService.instance.clearAll();
+      return false;
+    } catch (_) {
+      await StorageService.instance.clearAll();
+      return false;
     }
   }
 
   // ─── Get Me ────────────────────────────────────────────────────────────────
+  // Future<UserModel?> getMe() async {
+  //   final res = await _api.get(AppConstants.authMe);
+  //   if (res.success && res.data?['user'] != null) {
+  //     return UserModel.fromJson(res.data!['user']);
+  //   }
+  //   return null;
+  // }
+
   Future<UserModel?> getMe() async {
-    final res = await _api.get(AppConstants.authMe);
-    if (res.success && res.data?['user'] != null) {
-      return UserModel.fromJson(res.data!['user']);
+    try {
+      final token = await _token();
+      if (token == null || token.isEmpty) return null;
+
+      final res = await _api.get(AppConstants.authMe);
+
+      // ✅ ແກ້ໄຂ: ຖ້າ 401 ຕ້ອງ clear token ແລະ return null
+      if (res.statusCode == 401) {
+        print('🔑 Token expired/invalid - clearing...');
+        await StorageService.instance.clearAll();
+        return null;
+      }
+
+      if (res.success && res.data?['user'] != null) {
+        return UserModel.fromJson(res.data!['user']);
+      }
+      return null;
+    } catch (e) {
+      print('❌ getMe error: $e');
+      return null;
     }
-    return null;
   }
 
   // ─── Logout ────────────────────────────────────────────────────────────────
@@ -96,9 +143,7 @@ class AuthService {
     try {
       await _api.post(AppConstants.authLogout, {});
     } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(AppConstants.tokenKey);
-    await prefs.remove(AppConstants.userKey);
+    await StorageService.instance.clearAll();
   }
 
   // ─── Forgot Password ───────────────────────────────────────────────────────
@@ -137,12 +182,11 @@ class AuthService {
 
   // ─── Save Session ──────────────────────────────────────────────────────────
   Future<void> _saveSession(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
     if (data['token'] != null) {
-      await prefs.setString(AppConstants.tokenKey, data['token']);
+      await StorageService.instance.saveToken(data['token']);
     }
     if (data['user'] != null) {
-      await prefs.setString(AppConstants.userKey, jsonEncode(data['user']));
+      await StorageService.instance.saveUser(UserModel.fromJson(data['user']));
     }
   }
 }
