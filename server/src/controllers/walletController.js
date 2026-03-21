@@ -1,16 +1,17 @@
-const Wallet = require('../models/Wallet');
+const Wallet      = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
-const lnbits = require('../services/lnbitsService');
+const lnbits      = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
 
-// ─── GET /api/wallet ──────────────────────────────────────────────────────────
-
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/wallet
+// ════════════════════════════════════════════════════════════════════════════
 exports.getWallet = async (req, res) => {
     try {
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        const rate = await exchangeRate.getExchangeRate();
+        const rate       = await exchangeRate.getExchangeRate();
         const balanceLAK = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
 
         res.status(200).json({
@@ -20,8 +21,12 @@ exports.getWallet = async (req, res) => {
                 walletName:  wallet.walletName,
                 invoiceKey:  wallet.invoiceKey,
                 balanceSats: wallet.balanceSats,
-                balanceLAK,
-                rate: { btcToUSD: rate.btcToUSD, btcToLAK: rate.btcToLAK, updatedAt: rate.fetchedAt },
+                balanceLAK,  // ✅ คํานวณ real-time ຈາກ rate ປັດຈຸບັນ
+                rate: {
+                    btcToUSD:  rate.btcToUSD,
+                    btcToLAK:  rate.btcToLAK,
+                    updatedAt: rate.fetchedAt,
+                },
             },
         });
     } catch (error) {
@@ -30,8 +35,9 @@ exports.getWallet = async (req, res) => {
     }
 };
 
-// ─── GET /api/wallet/balance ──────────────────────────────────────────────────
-
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/wallet/balance
+// ════════════════════════════════════════════════════════════════════════════
 exports.getBalance = async (req, res) => {
     try {
         const wallet = await Wallet.findOne({ user: req.user._id });
@@ -42,16 +48,22 @@ exports.getBalance = async (req, res) => {
             exchangeRate.getExchangeRate(),
         ]);
 
-        wallet.balanceSats = balanceResult.balanceSats;
-        await wallet.save();
-
         const balanceLAK = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
+
+        // ✅ sync ທັງ balanceSats ແລະ balanceLAK
+        wallet.balanceSats = balanceResult.balanceSats;
+        wallet.balanceLAK  = balanceLAK;
+        await wallet.save();
 
         res.status(200).json({
             success: true,
             balance: {
-                sats: balanceResult.balanceSats, msats: balanceResult.balanceMsats,
-                lak: balanceLAK, btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD, rateAt: rate.fetchedAt,
+                sats:     balanceResult.balanceSats,
+                msats:    balanceResult.balanceMsats,
+                lak:      balanceLAK,
+                btcToLAK: rate.btcToLAK,
+                btcToUSD: rate.btcToUSD,
+                rateAt:   rate.fetchedAt,
             },
         });
     } catch (error) {
@@ -60,14 +72,20 @@ exports.getBalance = async (req, res) => {
     }
 };
 
-// ─── GET /api/wallet/rate ─────────────────────────────────────────────────────
-
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/wallet/rate
+// ════════════════════════════════════════════════════════════════════════════
 exports.getRate = async (req, res) => {
     try {
         const rate = await exchangeRate.getExchangeRate();
         res.status(200).json({
             success: true,
-            rate: { btcToUSD: rate.btcToUSD, btcToLAK: rate.btcToLAK, usdToLAK: rate.usdToLAK, updatedAt: rate.fetchedAt },
+            rate: {
+                btcToUSD:  rate.btcToUSD,
+                btcToLAK:  rate.btcToLAK,
+                usdToLAK:  rate.usdToLAK,
+                updatedAt: rate.fetchedAt,
+            },
         });
     } catch (error) {
         console.error('Get Rate Error:', error);
@@ -75,9 +93,9 @@ exports.getRate = async (req, res) => {
     }
 };
 
-// ─── POST /api/wallet/topup ───────────────────────────────────────────────────
-// ສ້າງ Lightning Invoice ສຳລັບ TopUp BTC ເຂົ້າ wallet
-
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/wallet/topup
+// ════════════════════════════════════════════════════════════════════════════
 exports.topUp = async (req, res) => {
     try {
         const { amountSats, memo } = req.body;
@@ -87,34 +105,42 @@ exports.topUp = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-
         const rate      = await exchangeRate.getExchangeRate();
         const amountLAK = await exchangeRate.convertSatsToLAK(amountSats);
 
         const invoiceResult = await lnbits.createInvoice({
             invoiceKey: wallet.invoiceKey,
-            amount: amountSats,
-            memo: memo || `TopUp ${amountSats} sats`,
+            amount:     amountSats,
+            memo:       memo || `TopUp ${amountSats} sats`,
         });
 
         const transaction = await Transaction.create({
-            user: req.user._id, wallet: wallet._id,
-            type: 'topup', status: 'pending',
-            amountSats, amountLAK,
-            paymentHash: invoiceResult.paymentHash,
+            user:           req.user._id,
+            wallet:         wallet._id,
+            type:           'topup',
+            status:         'pending',
+            amountSats,
+            amountLAK,
+            paymentHash:    invoiceResult.paymentHash,
             paymentRequest: invoiceResult.paymentRequest,
-            memo: memo || `TopUp ${amountSats} sats`,
-            exchangeRate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD, usdToLAK: rate.usdToLAK, fetchedAt: rate.fetchedAt },
+            memo:           memo || `TopUp ${amountSats} sats`,
+            exchangeRate: {
+                btcToLAK:  rate.btcToLAK,
+                btcToUSD:  rate.btcToUSD,
+                usdToLAK:  rate.usdToLAK,
+                fetchedAt: rate.fetchedAt,
+            },
         });
 
         res.status(201).json({
             success: true,
             message: 'ສ້າງ Invoice TopUp ສຳເລັດ — ສະແກນ QR ເພື່ອຈ່າຍ',
             topup: {
-                transactionId: transaction._id,
+                transactionId:  transaction._id,
                 paymentRequest: invoiceResult.paymentRequest,
-                paymentHash: invoiceResult.paymentHash,
-                amountSats, amountLAK,
+                paymentHash:    invoiceResult.paymentHash,
+                amountSats,
+                amountLAK,
                 rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
             },
         });
@@ -124,9 +150,9 @@ exports.topUp = async (req, res) => {
     }
 };
 
-// ─── POST /api/wallet/withdraw ────────────────────────────────────────────────
-// ຖອນ sats ອອກໂດຍຈ່າຍ Lightning Invoice ທີ່ສ້າງຈາກ wallet ອື່ນ
-
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/wallet/withdraw
+// ════════════════════════════════════════════════════════════════════════════
 exports.withdraw = async (req, res) => {
     try {
         const { paymentRequest, memo } = req.body;
@@ -146,19 +172,34 @@ exports.withdraw = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ຍອດເງິນ sats ບໍ່ພໍ' });
 
         const amountLAK = await exchangeRate.convertSatsToLAK(decoded.amountSats);
-        const payResult = await lnbits.payInvoice({ adminKey: wallet.adminKey, paymentRequest });
+        const payResult = await lnbits.payInvoice({
+            adminKey: wallet.adminKey,
+            paymentRequest,
+        });
 
-        wallet.balanceSats = balanceResult.balanceSats - decoded.amountSats - (payResult.feeSats || 0);
+        // ✅ sync ທັງ balanceSats ແລະ balanceLAK
+        const newBalanceSats  = balanceResult.balanceSats - decoded.amountSats - (payResult.feeSats || 0);
+        wallet.balanceSats    = newBalanceSats;
+        wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(newBalanceSats);
         await wallet.save();
 
         const transaction = await Transaction.create({
-            user: req.user._id, wallet: wallet._id,
-            type: 'withdraw', status: 'success',
-            amountSats: decoded.amountSats, amountLAK,
-            feeSats: payResult.feeSats || 0,
-            paymentHash: payResult.paymentHash, paymentRequest,
-            memo: memo || decoded.description || 'Withdraw',
-            exchangeRate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD, usdToLAK: rate.usdToLAK, fetchedAt: rate.fetchedAt },
+            user:           req.user._id,
+            wallet:         wallet._id,
+            type:           'withdraw',
+            status:         'success',
+            amountSats:     decoded.amountSats,
+            amountLAK,
+            feeSats:        payResult.feeSats || 0,
+            paymentHash:    payResult.paymentHash,
+            paymentRequest,
+            memo:           memo || decoded.description || 'Withdraw',
+            exchangeRate: {
+                btcToLAK:  rate.btcToLAK,
+                btcToUSD:  rate.btcToUSD,
+                usdToLAK:  rate.usdToLAK,
+                fetchedAt: rate.fetchedAt,
+            },
         });
 
         res.status(200).json({
@@ -166,10 +207,12 @@ exports.withdraw = async (req, res) => {
             message: 'ຖອນເງິນສຳເລັດ',
             withdraw: {
                 transactionId: transaction._id,
-                paymentHash: payResult.paymentHash,
-                amountSats: decoded.amountSats, amountLAK,
-                feeSats: payResult.feeSats || 0,
-                balanceSats: wallet.balanceSats,
+                paymentHash:   payResult.paymentHash,
+                amountSats:    decoded.amountSats,
+                amountLAK,
+                feeSats:       payResult.feeSats || 0,
+                balanceSats:   wallet.balanceSats,
+                balanceLAK:    wallet.balanceLAK, // ✅
             },
         });
     } catch (error) {
@@ -178,39 +221,38 @@ exports.withdraw = async (req, res) => {
     }
 };
 
-// ─── GET /api/wallet/topup/:paymentHash/status ────────────────────────────────
-// ເພີ່ມຕໍ່ທ້າຍ walletController.js
- 
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/wallet/topup/:paymentHash/status
+// ════════════════════════════════════════════════════════════════════════════
 exports.checkPaymentStatus = async (req, res) => {
     try {
         const { paymentHash } = req.params;
- 
+
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
- 
-        // ກວດສະຖານະຈາກ LNbits
+
         const result = await lnbits.checkPaymentStatus({
             invoiceKey: wallet.invoiceKey,
             paymentHash,
         });
- 
-        // ຖ້າຈ່າຍແລ້ວ — update transaction + balance
+
         if (result.paid) {
             await Transaction.findOneAndUpdate(
                 { paymentHash, user: req.user._id },
                 { status: 'success' },
             );
- 
-            // Refresh balance
-            const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
-            wallet.balanceSats = balanceResult.balanceSats;
+
+            // ✅ sync ທັງ balanceSats ແລະ balanceLAK
+            const balanceResult  = await lnbits.getBalance(wallet.invoiceKey);
+            wallet.balanceSats   = balanceResult.balanceSats;
+            wallet.balanceLAK    = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
             await wallet.save();
         }
- 
+
         res.status(200).json({
             success: true,
-            paid: result.paid,
-            status: result.status,
+            paid:    result.paid,
+            status:  result.status, 
         });
     } catch (error) {
         console.error('CheckPaymentStatus Error:', error);

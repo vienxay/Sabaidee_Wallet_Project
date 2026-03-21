@@ -2,6 +2,8 @@
 const User = require('../models/User');
 const Kyc  = require('../models/Kyc');
 const { cloudinary } = require('../services/cloudinaryService');
+// ✅ ເພີ່ມ: import email service
+const { sendKycApprovedEmail, sendKycRejectedEmail } = require('../services/emailService');
 
 const genRefId = () => 'KYC-' + Date.now().toString(36).toUpperCase();
 
@@ -17,14 +19,15 @@ const uploadToCloudinary = (buffer, folder) =>
 // POST /api/kyc/submit
 // ─────────────────────────────────────────────────────────────────────────────
 exports.submitKyc = async (req, res) => {
-    console.log('=== KYC Submit ===');       // ← ເພີ່ມ
-    console.log('body:', req.body);           // ← ເພີ່ມ
-    console.log('files:', req.files); 
+    console.log('=== KYC Submit ===');
+    console.log('body:', req.body);
+    console.log('files:', req.files);
+    
     try {
         const userId = req.user._id;
 
-        // ✅ Query DB ສົດໆ ບໍ່ໃຊ້ req.user (ເພາະ token ອາດ cache ເກົ່າ)
-        const freshUser = await User.findById(userId).select('kycStatus');
+        // ✅ Query DB ສົດໆ
+        const freshUser = await User.findById(userId).select('kycStatus email name');
         if (!freshUser) {
             return res.status(404).json({ success: false, message: 'ບໍ່ພົບ user' });
         }
@@ -132,7 +135,7 @@ exports.getMyKycStatus = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/kyc/verify/:userId  (Admin)
+// PUT /api/kyc/verify/:userId  (Admin) ✅ ແກ້ໄຂເພີ່ມ Email
 // ─────────────────────────────────────────────────────────────────────────────
 exports.reviewKyc = async (req, res) => {
     try {
@@ -147,6 +150,10 @@ exports.reviewKyc = async (req, res) => {
         const user = await User.findById(req.params.userId);
         if (!user) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ User' });
 
+        // ✅ ເກັບ email ແລະ name ກ່ອນອັບເດດ (ສຳລັບສົ່ງ email)
+        const userEmail = user.email;
+        const userName = user.name;
+
         await Kyc.findOneAndUpdate(
             { user: user._id },
             {
@@ -159,6 +166,29 @@ exports.reviewKyc = async (req, res) => {
 
         user.kycStatus = status;
         await user.save();
+
+        // ✅ สົ່ງ Email ແຈ້ງເຕືອນ (async ບໍ່ຕ້ອງລໍ)
+        if (status === 'verified') {
+            sendKycApprovedEmail(userEmail, userName)
+                .then(result => {
+                    if (result.success) {
+                        console.log('✅ KYC approval email sent to:', userEmail);
+                    } else {
+                        console.error('❌ Failed to send approval email:', result.error);
+                    }
+                })
+                .catch(err => console.error('❌ Email error:', err));
+        } else if (status === 'rejected') {
+            sendKycRejectedEmail(userEmail, userName, reviewNote)
+                .then(result => {
+                    if (result.success) {
+                        console.log('✅ KYC rejection email sent to:', userEmail);
+                    } else {
+                        console.error('❌ Failed to send rejection email:', result.error);
+                    }
+                })
+                .catch(err => console.error('❌ Email error:', err));
+        }
 
         return res.json({
             success: true,

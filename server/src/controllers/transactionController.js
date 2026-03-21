@@ -1,16 +1,17 @@
-const Transaction = require('../models/Transaction');
+const Transaction  = require('../models/Transaction');
 const exchangeRate = require('../services/exchangeRateService');
-const lnbits = require('../services/lnbitsService');
-const Wallet = require('../models/Wallet');
+const lnbits       = require('../services/lnbitsService');
+const Wallet       = require('../models/Wallet');
 
 // ─── GET /api/transactions ────────────────────────────────────────────────────
 // ດຶງປະຫວັດທຸລະກຳທັງໝົດ (pagination)
+// type query: topup | withdraw | pay | receive | laoQR
 
 exports.getTransactions = async (req, res) => {
     try {
         const page  = parseInt(req.query.page)  || 1;
         const limit = parseInt(req.query.limit) || 20;
-        const type  = req.query.type;   // topup | withdraw | pay | receive
+        const type  = req.query.type;
         const skip  = (page - 1) * limit;
 
         const filter = { user: req.user._id };
@@ -46,7 +47,7 @@ exports.getTransactions = async (req, res) => {
 exports.getTransaction = async (req, res) => {
     try {
         const transaction = await Transaction.findOne({
-            _id: req.params.id,
+            _id:  req.params.id,
             user: req.user._id,
         });
 
@@ -71,18 +72,15 @@ exports.checkPaymentStatus = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        // ກວດຈາກ LNbits
         const status = await lnbits.checkPayment({ invoiceKey: wallet.invoiceKey, paymentHash });
 
         if (status.paid) {
-            // ອັບເດດ transaction ໃນ DB
             const transaction = await Transaction.findOneAndUpdate(
                 { paymentHash, user: req.user._id },
                 { status: 'success' },
                 { new: true }
             );
 
-            // ອັບເດດ balance
             if (transaction?.type === 'topup') {
                 const balance = await lnbits.getBalance(wallet.invoiceKey);
                 wallet.balanceSats = balance.balanceSats;
@@ -91,7 +89,7 @@ exports.checkPaymentStatus = async (req, res) => {
         }
 
         res.status(200).json({
-            success: true,
+            success:     true,
             paid:        status.paid,
             paymentHash,
             transaction: status.paid ? await Transaction.findOne({ paymentHash }) : null,
@@ -113,10 +111,16 @@ exports.getSummary = async (req, res) => {
 
         const [summary, rate] = await Promise.all([
             Transaction.aggregate([
-                { $match: { user: req.user._id, status: 'success', createdAt: { $gte: startOfMonth } } },
+                {
+                    $match: {
+                        user:      req.user._id,
+                        status:    'success',
+                        createdAt: { $gte: startOfMonth },
+                    },
+                },
                 {
                     $group: {
-                        _id: '$type',
+                        _id:       '$type',
                         totalSats: { $sum: '$amountSats' },
                         totalLAK:  { $sum: '$amountLAK' },
                         count:     { $sum: 1 },
@@ -126,15 +130,21 @@ exports.getSummary = async (req, res) => {
             exchangeRate.getExchangeRate(),
         ]);
 
-        // ຈັດ format
-        const result = { topup: null, withdraw: null, pay: null, receive: null };
+        // ✅ ເພີ່ມ laoQR ໃນ default result
+        const result = {
+            topup:    null,
+            withdraw: null,
+            pay:      null,
+            receive:  null,
+            laoQR:    null, // ✅
+        };
         summary.forEach((s) => { result[s._id] = s; });
 
         res.status(200).json({
             success: true,
-            month: startOfMonth.toISOString().slice(0, 7),
+            month:   startOfMonth.toISOString().slice(0, 7),
             summary: result,
-            rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
+            rate:    { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
         });
     } catch (error) {
         console.error('Get Summary Error:', error);

@@ -31,6 +31,11 @@ const walletSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        // ✅ ເພີ່ມ: ຍອດເງິນກີບ (ໃຊ້ກັບ Internal Transfer)
+        balanceLAK: {
+            type: Number,
+            default: 0,
+        },
     },
     { timestamps: true }
 );

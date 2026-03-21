@@ -3,6 +3,7 @@ require('dotenv').config()
  
 // Import Core Packages
 const express  = require('express')
+
 const cors     = require('cors')
 const helmet   = require('helmet')       // ເພີ່ມ HTTP security headers
 const rateLimit = require('express-rate-limit')
@@ -18,6 +19,10 @@ const PORT = process.env.PORT || 3000
  
 // Connect Database
 connectDB()
+
+// ✅ ເພີ່ມ 2 ບັນທັດນີ້
+const { verifyEmailConnection } = require('./src/services/emailService')
+verifyEmailConnection()
 
 // ─── Security Headers 
 app.use(helmet())
@@ -43,6 +48,8 @@ app.use(express.urlencoded({ extended: true }))
 app.use(passport.initialize())
  
 // ─── Rate Limiters
+
+app.set('trust proxy', 1);
 
 // General: 100 req / 15 ນາທີ
 const limiter = rateLimit({
@@ -96,6 +103,15 @@ app.use('/api/wallet',       require('./src/routes/walletRoutes'))        // ເ
 app.use('/api/payment',      require('./src/routes/paymentRoutes'))       // ໃໝ່
 app.use('/api/transactions', require('./src/routes/transactionRoutes'))   // ໃໝ່
 app.use('/api/kyc',          require('./src/routes/kycRoutes'))           // ໃໝ່
+
+// ─── Deep Link Redirects ──────────────────────────────────────────────────────
+app.get('/open/home', (req, res) => {
+    res.redirect('sabaidee://home')
+})
+app.get('/open/kyc', (req, res) => {
+    res.redirect('sabaidee://kyc')
+})
+
 
 // ─── Root Route 
 app.get('/', (req, res) => {
