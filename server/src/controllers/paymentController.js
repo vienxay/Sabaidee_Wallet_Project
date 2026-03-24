@@ -17,7 +17,7 @@ const LIMIT = {
 // ✅ ເພີ່ມ: LAO QR daily limit
 const LAO_QR_LIMIT = {
     unverified: 2_000_000,  // 2,000,000 ກີບ/ມື້ — ຕ້ອງ KYC ເພື່ອໃຊ້ຕໍ່
-    verified:   20_000_000, // 20,000,000 ກີບ/ມື້ — KYC ແລ້ວ
+    verified:   100_000_000, // 20,000,000 ກີບ/ມື້ — KYC ແລ້ວ
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -120,7 +120,7 @@ exports.pay = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id }).select('+adminKey');
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        const kyc           = await KYC.findOne({ user: req.user._id });
+        const kyc = await Kyc.findOne({ user: req.user._id });
         const isKYCVerified = kyc?.status === 'verified';
         const limit         = isKYCVerified ? LIMIT.verified : LIMIT.unverified;
 
@@ -233,7 +233,7 @@ exports.payLaoQR = async (req, res) => {
         const { amountLAK, merchantName, bank, qrRaw, description } = req.body;
 
         // ── ດຶງ KYC status ───────────────────────────────────────────────────
-        const kyc           = await KYC.findOne({ user: userId });
+        const kyc = await Kyc.findOne({ user: userId });
         const isKYCVerified = kyc?.status === 'verified';
 
         const dailyLimit = isKYCVerified
@@ -311,7 +311,7 @@ exports.getLaoQRLimitStatus = async (req, res) => {
     try {
         const userId = req.user._id;
 
-        const kyc           = await KYC.findOne({ user: userId });
+        const kyc = await Kyc.findOne({ user: userId });
         const isKYCVerified = kyc?.status === 'verified';
         const dailyLimit    = isKYCVerified
             ? LAO_QR_LIMIT.verified
