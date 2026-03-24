@@ -1,6 +1,8 @@
 // ─── transfer_screen.dart ────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'transfer_confirm_screen.dart'; // ✅ ເພີ່ມ
+import '../../services/daily_limit_service.dart';
 
 class TransferScreen extends StatefulWidget {
   final String senderName;
@@ -13,11 +15,11 @@ class TransferScreen extends StatefulWidget {
 
   const TransferScreen({
     super.key,
-    this.senderName = 'SabaideeWallet_Panyadeth',
-    this.senderAccount = 'LAK 123****890',
+    this.senderName = '',
+    this.senderAccount = '',
     this.senderAvatarUrl,
-    this.receiverName = 'Viengxay Resturant',
-    this.receiverAccount = 'LAK 123****890',
+    this.receiverName = '',
+    this.receiverAccount = '',
     this.receiverAvatarUrl,
   });
 
@@ -38,6 +40,11 @@ class _TransferScreenState extends State<TransferScreen>
   // ── Quick amounts ──
   static const _quickAmounts = ['50,000', '100,000', '200,000', '500,000'];
 
+  // ✅ ເພີ່ມຫຼັງ static const _quickAmounts
+  int _todaySpent = 0;
+  int _dailyLimit = DailyLimitService.limitUnverified;
+  bool _limitLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +59,18 @@ class _TransferScreenState extends State<TransferScreen>
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
 
     _animCtrl.forward();
+    _loadLimit();
+  }
+
+  Future<void> _loadLimit() async {
+    final spent = await DailyLimitService.instance.getTodaySpent();
+    final limit = await DailyLimitService.instance.getDailyLimit();
+    if (!mounted) return;
+    setState(() {
+      _todaySpent = spent;
+      _dailyLimit = limit;
+      _limitLoaded = true;
+    });
   }
 
   @override
@@ -69,7 +88,21 @@ class _TransferScreenState extends State<TransferScreen>
 
   void _onNext() {
     if (_formKey.currentState!.validate()) {
-      // TODO: navigate to confirm screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TransferConfirmScreen(
+            senderName: widget.senderName,
+            senderAccount: widget.senderAccount,
+            senderAvatarUrl: widget.senderAvatarUrl,
+            receiverName: widget.receiverName,
+            receiverAccount: widget.receiverAccount,
+            receiverAvatarUrl: widget.receiverAvatarUrl,
+            amountLAK: int.parse(_amountCtrl.text.replaceAll(',', '')),
+            memo: _memoCtrl.text.trim(),
+          ),
+        ),
+      );
     }
   }
 
@@ -92,13 +125,14 @@ class _TransferScreenState extends State<TransferScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Account card ──
-                        _buildAccountCard(),
-                        const SizedBox(height: 24),
+                        if (_limitLoaded) ...[
+                          _buildLimitBar(),
+                          const SizedBox(height: 16),
+                        ],
 
                         // ── Amount ──
                         _buildLabel('ຈຳນວນເງິນ (LAK)', required: true),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 20),
                         _buildAmountField(),
                         const SizedBox(height: 12),
 
@@ -107,8 +141,8 @@ class _TransferScreenState extends State<TransferScreen>
                         const SizedBox(height: 20),
 
                         // ── Memo ──
-                        _buildLabel('ເຫດໃດ', required: true),
-                        const SizedBox(height: 8),
+                        _buildLabel('ເນື້ອໃນ', required: true),
+                        const SizedBox(height: 20),
                         _buildMemoField(),
                         const SizedBox(height: 32),
 
@@ -126,9 +160,8 @@ class _TransferScreenState extends State<TransferScreen>
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
   // Header (orange)
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════
   Widget _buildHeader(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -142,8 +175,9 @@ class _TransferScreenState extends State<TransferScreen>
         bottom: 24,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, // ✅ ເພີ່ມ
         children: [
-          // ── Top bar ──
+          // ── Top bar ── (ຄືເດີມ)
           Row(
             children: [
               GestureDetector(
@@ -152,7 +186,7 @@ class _TransferScreenState extends State<TransferScreen>
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
@@ -173,93 +207,177 @@ class _TransferScreenState extends State<TransferScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 38), // balance icon space
+              const SizedBox(width: 38),
             ],
           ),
           const SizedBox(height: 24),
 
-          // ── From / To ──
-          Row(
-            children: [
-              // ── ຈາກບັນຊີ ──
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ຈາກບັນຊີ',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildAccountRow(
-                      name: widget.senderName,
-                      account: widget.senderAccount,
-                      avatarUrl: widget.senderAvatarUrl,
-                      avatarIcon: Icons.person,
-                    ),
-                  ],
-                ),
-              ),
+          // ✅ ຈາກ Row → Column
+          // ── ຈາກບັນຊີ ──
+          Text(
+            'ຈາກບັນຊີ',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildAccountRow(
+            name: widget.senderName,
+            account: widget.senderAccount,
+            avatarUrl: widget.senderAvatarUrl,
+            avatarIcon: Icons.person,
+          ),
+          const SizedBox(height: 16),
 
-              // ── Arrow ──
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-
-              // ── ທາບັນຊີ ──
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'ທາບັນຊີ',
-                      textAlign: TextAlign.end,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildAccountRow(
-                      name: widget.receiverName,
-                      account: widget.receiverAccount,
-                      avatarUrl: widget.receiverAvatarUrl,
-                      avatarIcon: Icons.store_mall_directory_outlined,
-                      alignEnd: true,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          // ── ທາບັນຊີ ──
+          Text(
+            'ຫາບັນຊີ',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.8),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildAccountRow(
+            name: widget.receiverName,
+            account: widget.receiverAccount,
+            avatarUrl: widget.receiverAvatarUrl,
+            avatarIcon: Icons.store_mall_directory_outlined,
           ),
         ],
       ),
     );
   }
 
-  // ── Account row (avatar + name + account) ──────────────────────────────────
+  // ✅ ເພີ່ມກ່ອນ _buildLabel()
+  Widget _buildLimitBar() {
+    final remaining = _dailyLimit - _todaySpent;
+    final progress = (_todaySpent / _dailyLimit).clamp(0.0, 1.0);
+    final isNear = progress >= 0.8;
+
+    String fmt(int n) => n.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'ວົງເງິນຄົງເຫຼືອວັນນີ້',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: fmt(remaining),
+                    style: TextStyle(
+                      color: isNear
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFFE8820C),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' / ${fmt(_dailyLimit)} ກີບ',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            backgroundColor: Colors.grey.shade200,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isNear ? const Color(0xFFEF4444) : const Color(0xFFE8820C),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Account row (avatar + name + account)
+  // Widget _buildAccountRow({
+  //   required String name,
+  //   required String account,
+  //   String? avatarUrl,
+  //   IconData avatarIcon = Icons.person,
+  //   bool alignEnd = false,
+  // }) {
+  //   final avatar = Container(
+  //     width: 44,
+  //     height: 44,
+  //     decoration: BoxDecoration(
+  //       color: Colors.white,
+  //       shape: BoxShape.circle,
+  //       border: Border.all(
+  //         color: Colors.white.withValues(alpha: 0.6),
+  //         width: 2,
+  //       ),
+  //     ),
+  //     child: avatarUrl != null
+  //         ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover))
+  //         : Icon(avatarIcon, color: const Color(0xFFE8820C), size: 24),
+  //   );
+
+  //   final textCol = Column(
+  //     crossAxisAlignment: alignEnd
+  //         ? CrossAxisAlignment.end
+  //         : CrossAxisAlignment.start,
+  //     children: [
+  //       Text(
+  //         name,
+  //         maxLines: 1,
+  //         overflow: TextOverflow.ellipsis,
+  //         style: const TextStyle(
+  //           color: Colors.white,
+  //           fontSize: 13,
+  //           fontWeight: FontWeight.w700,
+  //         ),
+  //       ),
+  //       const SizedBox(height: 2),
+  //       Text(
+  //         account,
+  //         style: TextStyle(
+  //           color: Colors.white.withValues(alpha: 0.75),
+  //           fontSize: 11,
+  //         ),
+  //       ),
+  //     ],
+  //   );
+
+  //   return alignEnd
+  //       ? Row(
+  //           mainAxisAlignment: MainAxisAlignment.end,
+  //           children: [textCol, const SizedBox(width: 8), avatar],
+  //         )
+  //       : Row(
+  //           children: [
+  //             avatar,
+  //             const SizedBox(width: 8),
+  //             Flexible(child: textCol),
+  //           ],
+  //         );
+  // }
+
   Widget _buildAccountRow({
     required String name,
     required String account,
     String? avatarUrl,
     IconData avatarIcon = Icons.person,
-    bool alignEnd = false,
   }) {
     final avatar = Container(
       width: 44,
@@ -267,133 +385,51 @@ class _TransferScreenState extends State<TransferScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withOpacity(0.6), width: 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.6),
+          width: 2,
+        ),
       ),
       child: avatarUrl != null
           ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover))
           : Icon(avatarIcon, color: const Color(0xFFE8820C), size: 24),
     );
 
-    final textCol = Column(
-      crossAxisAlignment: alignEnd
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+        avatar,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                account,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  fontSize: 11,
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          account,
-          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 11),
         ),
       ],
     );
-
-    return alignEnd
-        ? Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [textCol, const SizedBox(width: 8), avatar],
-          )
-        : Row(
-            children: [
-              avatar,
-              const SizedBox(width: 8),
-              Flexible(child: textCol),
-            ],
-          );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // Account summary card (white)
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildAccountCard() => Container(
-    margin: const EdgeInsets.only(top: 20),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.06),
-          blurRadius: 16,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: _accountSummaryItem(
-            label: 'ຈາກ',
-            name: widget.senderName,
-            account: widget.senderAccount,
-            iconColor: const Color(0xFFE8820C),
-          ),
-        ),
-        Container(width: 1, height: 40, color: const Color(0xFFF0EAE0)),
-        Expanded(
-          child: _accountSummaryItem(
-            label: 'ຫາ',
-            name: widget.receiverName,
-            account: widget.receiverAccount,
-            iconColor: const Color(0xFF4CAF50),
-            alignEnd: true,
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _accountSummaryItem({
-    required String label,
-    required String name,
-    required String account,
-    required Color iconColor,
-    bool alignEnd = false,
-  }) => Padding(
-    padding: EdgeInsets.only(left: alignEnd ? 16 : 0, right: alignEnd ? 0 : 16),
-    child: Column(
-      crossAxisAlignment: alignEnd
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF1A1A1A),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(account, style: TextStyle(color: Colors.grey[500], fontSize: 11)),
-      ],
-    ),
-  );
-
-  // ══════════════════════════════════════════════════════════════════════════
   // Form fields
-  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════
   Widget _buildLabel(String text, {bool required = false}) => RichText(
     text: TextSpan(
       text: text,
@@ -495,7 +531,7 @@ class _TransferScreenState extends State<TransferScreen>
     controller: _memoCtrl,
     style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
     decoration: InputDecoration(
-      hintText: 'ເຫດໃດ',
+      hintText: 'ເນື້ອໃນ',
       hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
       filled: true,
       fillColor: Colors.white,
@@ -517,12 +553,12 @@ class _TransferScreenState extends State<TransferScreen>
         borderSide: const BorderSide(color: Colors.red, width: 1.8),
       ),
     ),
-    validator: (v) => (v == null || v.trim().isEmpty) ? 'ກະລຸນາໃສ່ເຫດໃດ' : null,
+    validator: (v) =>
+        (v == null || v.trim().isEmpty) ? 'ກະລຸນາໃສ່ເນື້ອໃນ' : null,
   );
 
-  // ══════════════════════════════════════════════════════════════════════════
   // Next button
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════
   Widget _buildNextButton() => SizedBox(
     width: double.infinity,
     height: 54,

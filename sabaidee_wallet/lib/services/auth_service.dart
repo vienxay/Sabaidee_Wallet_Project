@@ -5,6 +5,7 @@ import '../core/app_constants.dart';
 import '../models/app_models.dart';
 import 'api_client.dart';
 import 'storage_service.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService {
   AuthService._();
@@ -123,7 +124,7 @@ class AuthService {
 
       // ✅ ແກ້ໄຂ: ຖ້າ 401 ຕ້ອງ clear token ແລະ return null
       if (res.statusCode == 401) {
-        print('🔑 Token expired/invalid - clearing...');
+        debugPrint('🔑 Token expired/invalid - clearing...');
         await StorageService.instance.clearAll();
         return null;
       }
@@ -133,7 +134,7 @@ class AuthService {
       }
       return null;
     } catch (e) {
-      print('❌ getMe error: $e');
+      debugPrint('❌ getMe error: $e');
       return null;
     }
   }

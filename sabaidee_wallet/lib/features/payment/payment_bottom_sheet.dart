@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'payment_error_dialog.dart';
+// ເພີ່ມ import ກ່ອນ
+import 'payment_success_screen.dart';
 
 const String _baseUrl =
     'https://unpluralized-membranophonic-saniya.ngrok-free.dev';
@@ -100,8 +102,26 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
       setState(() => _isLoading = false);
 
       if (res.statusCode == 200 && body['success'] == true) {
+        final payment = body['payment'] as Map<String, dynamic>? ?? {};
         localNav.pop();
-        // TODO: ສະແດງ success screen
+
+        // ✅ ເພີ່ມຕໍ່ຈາກນີ້ເລີຍ
+        showModalBottomSheet(
+          context: rootNav.context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => PaymentSuccessSheet(
+            senderName: 'Sabaidee Wallet',
+            receiverName: widget.description.isNotEmpty
+                ? widget.description
+                : 'ຜູ້ຮັບ',
+            amountLAK: ((payment['amountLAK'] ?? 0) as num).toDouble(),
+            amountSats: widget.amountSats,
+            feeLAK: (payment['feeSats'] ?? 0) as int,
+            memo: widget.description,
+            closeToHome: false,
+          ),
+        );
       } else {
         localNav.pop();
         await PaymentErrorDialog.show(

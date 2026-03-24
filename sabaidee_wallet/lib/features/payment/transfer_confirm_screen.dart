@@ -1,5 +1,13 @@
 // ─── lib/features/payment/transfer_confirm_screen.dart ──────────────────────
 import 'package:flutter/material.dart';
+// ເພີ່ມ imports ທີ່ header
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'payment_success_screen.dart';
+
+const String _baseUrl =
+    'https://unpluralized-membranophonic-saniya.ngrok-free.dev';
 
 class TransferConfirmScreen extends StatefulWidget {
   final String senderName;
@@ -60,17 +68,83 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
     super.dispose();
   }
 
-  // ─── Confirm ───────────────────────────────────────────────────────────────
+  // ─── Confirm
   Future<void> _onConfirm() async {
     setState(() => _loading = true);
-    // TODO: call payment API
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    setState(() => _loading = false);
-    // TODO: navigate to success screen
+
+    try {
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'auth_token');
+      if (token == null || !mounted) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final res = await http.post(
+        Uri.parse('$_baseUrl/api/payment/laoqr/pay'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: jsonEncode({
+          'amountLAK': widget.amountLAK,
+          'merchantName': widget.receiverName,
+          'description': widget.memo,
+        }),
+      );
+
+      if (!mounted) return;
+      setState(() => _loading = false);
+
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+
+      if (res.statusCode == 200 && body['success'] == true) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => Scaffold(
+              backgroundColor: Colors.transparent,
+              body: Center(
+                child: PaymentSuccessSheet(
+                  senderName: widget.senderName,
+                  receiverName: widget.receiverName,
+                  amountLAK: widget.amountLAK.toDouble(),
+                  amountSats: 0,
+                  feeLAK: widget.feeLAK,
+                  memo: widget.memo,
+                  closeToHome: true,
+                ),
+              ),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(body['message'] ?? 'ເກີດຂໍ້ຜິດພາດ'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ບໍ່ສາມາດເຊື່ອມຕໍ່ server ໄດ້'),
+          backgroundColor: Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // ─── Helpers
   String _fmt(int n) => n.toString().replaceAllMapped(
     RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
     (m) => '${m[1]},',
@@ -106,9 +180,8 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
   // Header (orange) — ຈາກ / ຫາ
-  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════
   Widget _buildHeader(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -132,7 +205,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(
@@ -173,7 +246,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
             children: [
               Expanded(
                 child: Divider(
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                   thickness: 1,
                 ),
               ),
@@ -182,7 +255,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -193,7 +266,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
               ),
               Expanded(
                 child: Divider(
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                   thickness: 1,
                 ),
               ),
@@ -225,7 +298,10 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
     children: [
       Text(
         label,
-        style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.75),
+          fontSize: 12,
+        ),
       ),
       const SizedBox(height: 8),
       Row(
@@ -238,7 +314,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
               color: Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha: 0.5),
                 width: 2,
               ),
             ),
@@ -263,7 +339,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
               Text(
                 account,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.75),
+                  color: Colors.white.withValues(alpha: 0.75),
                   fontSize: 12,
                 ),
               ),
@@ -274,9 +350,8 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
     ],
   );
 
-  // ══════════════════════════════════════════════════════════════════════════
   // Details card (white)
-  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════
   Widget _buildDetailsCard() => Container(
     margin: const EdgeInsets.only(top: 20),
     decoration: BoxDecoration(
@@ -284,7 +359,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
       borderRadius: BorderRadius.circular(20),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05),
           blurRadius: 16,
           offset: const Offset(0, 4),
         ),
@@ -376,9 +451,8 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
     endIndent: 20,
   );
 
-  // ══════════════════════════════════════════════════════════════════════════
   // Confirm button
-  // ══════════════════════════════════════════════════════════════════════════
+  // ════════════════
   Widget _buildConfirmButton() => SizedBox(
     width: double.infinity,
     height: 54,
@@ -387,7 +461,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFFE8820C),
         foregroundColor: Colors.white,
-        disabledBackgroundColor: const Color(0xFFE8820C).withOpacity(0.6),
+        disabledBackgroundColor: const Color(0xFFE8820C).withValues(alpha: 0.6),
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),

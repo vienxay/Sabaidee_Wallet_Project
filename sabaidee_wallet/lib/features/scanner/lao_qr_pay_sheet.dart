@@ -1,7 +1,4 @@
 // ─── lao_qr_pay_sheet.dart ───────────────────────────────────────────────────
-// ໜ້າຈໍປ້ອນຈຳນວນເງິນສຳລັບ LAO QR (Demo Mode)
-// • ວົງເງິນ 2,000,000 ກີບ/ມື້
-// • ເກີນວົງເງິນ → KYC (ເທື່ອດຽວ)
 
 import 'package:flutter/material.dart';
 import '../../models/app_models.dart';
@@ -29,12 +26,11 @@ class LaoQRPaySheet extends StatefulWidget {
 
 class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
   final _amountCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   bool _loading = false;
-  String? _error;
-
-  // ── ຍອດໃຊ້ວັນນີ້ (load ເວລາ init) ──
   int _todaySpent = 0;
+  int _dailyLimit = DailyLimitService.limitUnverified;
   bool _limitLoaded = false;
 
   static const _quickAmounts = ['10000', '20000', '50000', '100000'];
@@ -42,7 +38,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
   @override
   void initState() {
     super.initState();
-    _loadTodaySpent();
+    _loadLimit();
   }
 
   @override
@@ -51,280 +47,299 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
     super.dispose();
   }
 
-  // ─── Load ຍອດວັນນີ້ ──────────────────────────────────────────────────────
-  Future<void> _loadTodaySpent() async {
+  Future<void> _loadLimit() async {
     final spent = await DailyLimitService.instance.getTodaySpent();
+    final limit = await DailyLimitService.instance.getDailyLimit();
     if (!mounted) return;
     setState(() {
       _todaySpent = spent;
+      _dailyLimit = limit;
       _limitLoaded = true;
     });
   }
 
-  int get _remaining => DailyLimitService.dailyLimitLAK - _todaySpent;
+  int get _remaining => _dailyLimit - _todaySpent;
 
-  // ─── Demo Pay ──────────────────────────────────────────────────────────────
+  String _fmt(int n) => n.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
+
+  // ─── Pay ──────────────────────────────────────────────────────────────────
   Future<void> _pay() async {
+    if (!_formKey.currentState!.validate()) return;
+
     final amount = int.tryParse(_amountCtrl.text.trim().replaceAll(',', ''));
-    if (amount == null || amount <= 0) {
-      setState(() => _error = 'ກະລຸນາໃສ່ຈຳນວນເງິນທີ່ຖືກຕ້ອງ');
-      return;
-    }
+    if (amount == null || amount <= 0) return;
 
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    // ✅ ເກັບ navigator ກ່ອນ await
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    final localNav = Navigator.of(context);
 
-    // ── ກວດ daily limit ──
+    setState(() => _loading = true);
+
     final check = await DailyLimitService.instance.canPay(amount);
-
     if (!mounted) return;
 
     if (!check.allowed) {
       setState(() => _loading = false);
-      await _showLimitExceededDialog(check);
+      _showLimitDialog(check);
       return;
     }
 
-    // ── Demo: ຈຳລອງການສົ່ງ ──
-    await Future.delayed(const Duration(milliseconds: 1500));
-
+    await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
 
-    // ── ບັນທຶກຍອດ ──
     await DailyLimitService.instance.recordPayment(amount);
-
     setState(() => _loading = false);
-
-    final rootNav = Navigator.of(context, rootNavigator: true);
-    final localNav = Navigator.of(context);
 
     localNav.pop();
     widget.onSuccess?.call();
 
+    if (!mounted) return;
     showModalBottomSheet(
       context: rootNav.context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => PaymentSuccessSheet(
-        senderName: 'Sabaidee wallet',
+        senderName: 'Sabaidee Wallet',
         receiverName: widget.qrInfo.merchantName,
         amountLAK: amount.toDouble(),
         amountSats: 0,
+        closeToHome: true,
       ),
     );
   }
-
-  // ─── Dialog ເກີນວົງເງິນ → KYC ───────────────────────────────────────────
-  Future<void> _showLimitExceededDialog(LimitCheckResult check) async {
-    final rootNav = Navigator.of(context, rootNavigator: true);
-    final localNav = Navigator.of(context);
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── ໄອຄອນ ──
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.verified_user_outlined,
-                  color: Colors.orange,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // ── ຫົວຂໍ້ ──
-              const Text(
-                'ເກີນວົງເງິນຕໍ່ມື້',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ── ລາຍລະອຽດ ──
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2A),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    _limitRow(
-                      'ຍອດໃຊ້ວັນນີ້',
-                      '${check.todaySpentFormatted} ກີບ',
-                      Colors.white60,
-                    ),
-                    const Divider(color: Colors.white12, height: 16),
-                    _limitRow(
-                      'ວົງເງິນຄົງເຫຼືອ',
-                      '${check.remainingFormatted} ກີບ',
-                      const Color(0xFFFFB300),
-                    ),
-                    const Divider(color: Colors.white12, height: 16),
-                    _limitRow(
-                      'ຈຳນວນທີ່ຕ້ອງການ',
-                      '${_fmt(check.requested)} ກີບ',
-                      const Color(0xFFFF5252),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              Text(
-                'ເພື່ອຍົກລະດັບວົງເງິນ ກະລຸນາຢືນຢັນຕົວຕົນ (KYC)\n'
-                'ທຳຄັ້ງດຽວ — ໃຊ້ໄດ້ຕະຫຼອດ',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[400], fontSize: 13),
-              ),
-              const SizedBox(height: 20),
-
-              // ── ປຸ່ມ ──
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop(); // ປິດ dialog
-                    localNav.pop(); // ປິດ sheet
-                    rootNav.pushNamed('/kyc');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFB300),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        color: Colors.black87,
-                        size: 18,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'ຢືນຢັນຕົວຕົນ (KYC)',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text(
-                  'ຍົກເລີກ',
-                  style: TextStyle(color: Colors.white38, fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _limitRow(String label, String value, Color valueColor) => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: [
-      Text(label, style: const TextStyle(color: Colors.white38, fontSize: 13)),
-      Text(
-        value,
-        style: TextStyle(
-          color: valueColor,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
-
-  static String _fmt(int n) => n.toString().replaceAllMapped(
-    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-    (m) => '${m[1]},',
-  );
 
   // ─── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        color: Color(0xFFF5F0E8),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
-        left: 24,
-        right: 24,
-        top: 16,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHandle(),
-            const SizedBox(height: 20),
-            _buildMerchantInfo(),
-            const SizedBox(height: 8),
-            _buildDemoBadge(),
-            const SizedBox(height: 16),
-
-            // ── Daily limit bar ──
-            if (_limitLoaded) _buildLimitBar(),
-            const SizedBox(height: 20),
-
-            _buildAmountInput(),
-
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                style: const TextStyle(color: Color(0xFFFF5252), fontSize: 13),
-                textAlign: TextAlign.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Handle ──
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(2),
               ),
-            ],
-            const SizedBox(height: 24),
-            _buildButtons(),
-          ],
-        ),
+            ),
+          ),
+
+          // ── Orange Header ──
+          _buildHeader(),
+
+          // ── Body ──
+          Flexible(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 28,
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Daily limit bar ──
+                    if (_limitLoaded) ...[
+                      _buildLimitBar(),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // ── Amount field ──
+                    _buildLabel('ຈຳນວນເງິນ (LAK)', required: true),
+                    const SizedBox(height: 8),
+                    _buildAmountField(),
+                    const SizedBox(height: 12),
+
+                    // ── Quick chips ──
+                    _buildQuickChips(),
+                    const SizedBox(height: 28),
+
+                    // ── ສົ່ງເງິນ button ──
+                    _buildPayButton(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ─── Daily Limit Progress Bar ───────────────────────────────────────────────
-  Widget _buildLimitBar() {
-    final progress = (_todaySpent / DailyLimitService.dailyLimitLAK).clamp(
-      0.0,
-      1.0,
+  // ── Orange Header ────────────────────────────────────────────────────────
+  Widget _buildHeader() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFE8820C),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        children: [
+          // ── Title + close ──
+          Row(
+            children: [
+              GestureDetector(
+                onTap: widget.onCancel,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ),
+              const Expanded(
+                child: Text(
+                  'ຈ່າຍ QR',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 36),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ── ຈາກ ──
+          _buildPartyRow(
+            label: 'ຈາກບັນຊີ',
+            name: 'Sabaidee Wallet',
+            account: 'ສາບາຍດີ Wallet',
+            icon: Icons.account_balance_wallet_outlined,
+          ),
+          const SizedBox(height: 12),
+
+          // ── Divider + arrow ──
+          Row(
+            children: [
+              Expanded(
+                child: Divider(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  thickness: 1,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.arrow_downward,
+                  color: Colors.white,
+                  size: 14,
+                ),
+              ),
+              Expanded(
+                child: Divider(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  thickness: 1,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // ── ຫາ (Merchant) ──
+          _buildPartyRow(
+            label: 'ທາບັນຊີ',
+            name: widget.qrInfo.merchantName,
+            account: widget.qrInfo.bank,
+            icon: Icons.store_mall_directory_outlined,
+          ),
+        ],
+      ),
     );
-    final isNearLimit = progress >= 0.8;
+  }
+
+  Widget _buildPartyRow({
+    required String label,
+    required String name,
+    required String account,
+    required IconData icon,
+    String? avatarUrl,
+  }) => Row(
+    children: [
+      // Avatar
+      Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.5),
+            width: 2,
+          ),
+        ),
+        child: avatarUrl != null
+            ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover))
+            : Icon(icon, color: const Color(0xFFE8820C), size: 24),
+      ),
+      const SizedBox(width: 12),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.75),
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            account,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.75),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+
+  // ── Limit Bar ────────────────────────────────────────────────────────────
+  Widget _buildLimitBar() {
+    final progress = (_todaySpent / _dailyLimit).clamp(0.0, 1.0);
+    final isNear = progress >= 0.8;
+    final barColor = isNear ? const Color(0xFFEF4444) : const Color(0xFFE8820C);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,9 +347,9 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'ວົງເງິນຄົງເຫຼືອວັນນີ້',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
             ),
             RichText(
               text: TextSpan(
@@ -342,249 +357,230 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
                   TextSpan(
                     text: _fmt(_remaining),
                     style: TextStyle(
-                      color: isNearLimit
-                          ? const Color(0xFFFF5252)
-                          : const Color(0xFFFFB300),
+                      color: isNear
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFFE8820C),
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   TextSpan(
-                    text: ' / ${_fmt(DailyLimitService.dailyLimitLAK)} ກີບ',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    text: ' / ${_fmt(_dailyLimit)} ກີບ',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: progress,
             minHeight: 6,
-            backgroundColor: const Color(0xFF2A2A2A),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isNearLimit ? const Color(0xFFFF5252) : const Color(0xFFFFB300),
-            ),
+            backgroundColor: Colors.grey.shade200,
+            valueColor: AlwaysStoppedAnimation<Color>(barColor),
           ),
         ),
       ],
     );
   }
 
-  // ─── Sub-widgets ───────────────────────────────────────────────────────────
-  Widget _buildHandle() => Center(
-    child: Container(
-      width: 40,
-      height: 4,
-      decoration: BoxDecoration(
-        color: Colors.grey[700],
-        borderRadius: BorderRadius.circular(2),
+  // ── Form fields ──────────────────────────────────────────────────────────
+  Widget _buildLabel(String text, {bool required = false}) => RichText(
+    text: TextSpan(
+      text: text,
+      style: const TextStyle(
+        color: Color(0xFF1A1A1A),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
       ),
+      children: required
+          ? [
+              const TextSpan(
+                text: ' *',
+                style: TextStyle(color: Color(0xFFE8820C)),
+              ),
+            ]
+          : [],
     ),
   );
 
-  Widget _buildMerchantInfo() => Column(
-    children: [
-      Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          color: const Color(0xFF2A2A2A),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFB300).withOpacity(0.3)),
-        ),
-        child: const Icon(Icons.qr_code_2, color: Color(0xFFFFB300), size: 36),
+  Widget _buildAmountField() => TextFormField(
+    controller: _amountCtrl,
+    keyboardType: TextInputType.number,
+    style: const TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: Color(0xFF1A1A1A),
+    ),
+    decoration: InputDecoration(
+      hintText: 'ປ້ອນຈຳນວນເງິນ',
+      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+      prefixText: 'LAK  ',
+      prefixStyle: const TextStyle(
+        color: Color(0xFFE8820C),
+        fontWeight: FontWeight.w700,
+        fontSize: 15,
       ),
-      const SizedBox(height: 12),
-      Text(
-        widget.qrInfo.merchantName,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-        ),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
       ),
-      const SizedBox(height: 4),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2A2A2A),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          widget.qrInfo.bank,
-          style: const TextStyle(color: Color(0xFFFFB300), fontSize: 12),
-        ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFFE8820C), width: 1.8),
       ),
-    ],
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.red, width: 1.8),
+      ),
+    ),
+    validator: (v) {
+      if (v == null || v.isEmpty) return 'ກະລຸນາໃສ່ຈຳນວນເງິນ';
+      final n = int.tryParse(v.replaceAll(',', ''));
+      if (n == null || n < 1000) return 'ຕ້ອງຢ່າງໜ້ອຍ 1,000 ກີບ';
+      return null;
+    },
+    onChanged: (_) => setState(() {}),
   );
 
-  Widget _buildDemoBadge() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-    decoration: BoxDecoration(
-      color: Colors.orange.withOpacity(0.15),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.orange.withOpacity(0.4)),
-    ),
-    child: const Text(
-      '⚠️ Demo Mode — ບໍ່ເຊື່ອມຕໍ່ LAPNET',
-      style: TextStyle(color: Colors.orange, fontSize: 11),
+  Widget _buildQuickChips() => Wrap(
+    spacing: 8,
+    children: _quickAmounts.map((amt) {
+      final isSelected = _amountCtrl.text == amt;
+      return GestureDetector(
+        onTap: () => setState(() => _amountCtrl.text = amt),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFE8820C) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFFE8820C)
+                  : Colors.grey.shade300,
+            ),
+          ),
+          child: Text(
+            '${int.parse(amt) ~/ 1000}k ກີບ',
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFF555555),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }).toList(),
+  );
+
+  Widget _buildPayButton() => SizedBox(
+    width: double.infinity,
+    height: 54,
+    child: ElevatedButton(
+      onPressed: _loading ? null : _pay,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFE8820C),
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: const Color(0xFFE8820C).withValues(alpha: 0.5),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: _loading
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Colors.white,
+              ),
+            )
+          : const Text(
+              'ສົ່ງເງິນ',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
     ),
   );
 
-  Widget _buildAmountInput() => Container(
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: const Color(0xFF2A2A2A),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Column(
+  // ── Limit exceeded dialog ────────────────────────────────────────────────
+  void _showLimitDialog(LimitCheckResult check) {
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    final localNav = Navigator.of(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFE8820C)),
+            SizedBox(width: 8),
+            Text('ເກີນວົງເງິນຕໍ່ມື້'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dialogRow('ຍອດໃຊ້ວັນນີ້', '${check.todaySpentFormatted} ກີບ'),
+            _dialogRow('ວົງເງິນຄົງເຫຼືອ', '${check.remainingFormatted} ກີບ'),
+            _dialogRow('ຈຳນວນທີ່ຕ້ອງການ', '${_fmt(check.requested)} ກີບ'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('ຍົກເລີກ'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              localNav.pop();
+              rootNav.pushNamed('/kyc');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE8820C),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('ຢືນຢັນ KYC'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'ຈຳນວນເງິນ (ກີບ)',
-          style: TextStyle(color: Colors.white38, fontSize: 12),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _amountCtrl,
-          keyboardType: TextInputType.number,
-          textAlign: TextAlign.center,
+        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+        Text(
+          value,
           style: const TextStyle(
-            color: Color(0xFFFFB300),
-            fontSize: 36,
-            fontWeight: FontWeight.w800,
-          ),
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            hintText: '0',
-            hintStyle: TextStyle(color: Colors.white24),
-          ),
-          onChanged: (_) => setState(() => _error = null),
-        ),
-        const Text(
-          'LAK',
-          style: TextStyle(
-            color: Colors.white38,
-            fontSize: 14,
             fontWeight: FontWeight.w600,
+            color: Color(0xFF1A1A1A),
+            fontSize: 13,
           ),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _quickAmounts
-              .map(
-                (amt) => _QuickAmountChip(
-                  label: _quickLabel(amt),
-                  onTap: () {
-                    _amountCtrl.text = amt;
-                    setState(() => _error = null);
-                  },
-                ),
-              )
-              .toList(),
         ),
       ],
-    ),
-  );
-
-  Widget _buildButtons() => Row(
-    children: [
-      Expanded(
-        child: ElevatedButton(
-          onPressed: _loading ? null : widget.onCancel,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2A2A2A),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 0,
-          ),
-          child: const Text(
-            'ຍົກເລີກ',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Colors.white60,
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(width: 14),
-      Expanded(
-        flex: 2,
-        child: ElevatedButton(
-          onPressed: _loading ? null : _pay,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFFB300),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 0,
-          ),
-          child: _loading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.send_rounded, color: Colors.black87, size: 18),
-                    SizedBox(width: 8),
-                    Text(
-                      'ສົ່ງເງິນ',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    ],
-  );
-
-  String _quickLabel(String amt) {
-    final n = int.parse(amt);
-    return n >= 1000 ? '${n ~/ 1000}k' : amt;
-  }
-}
-
-// ─── Quick Amount Chip ────────────────────────────────────────────────────────
-class _QuickAmountChip extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _QuickAmountChip({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFFFB300).withOpacity(0.4)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(color: Color(0xFFFFB300), fontSize: 13),
-      ),
     ),
   );
 }

@@ -77,11 +77,25 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     });
   }
 
-  void _handleLink(Uri uri) {
+  void _handleLink(Uri uri) async {
     if (uri.scheme != 'sabaidee') return;
+
+    // ✅ ກວດ login ກ່ອນ navigate ສະເໝີ
+    final isLoggedIn = await AuthService.instance.isLoggedIn();
+
+    if (!isLoggedIn) {
+      // ຍັງບໍ່ login → ໄປໜ້າ login ກ່ອນ ແລ້ວ redirect ຕໍ່
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/login',
+        (route) => false,
+      );
+      return;
+    }
 
     switch (uri.host) {
       case 'home':
+        // ✅ sync KYC ກ່ອນໄປໜ້າ home
+        await KycGateService.instance.syncFromBackend();
         _navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/home',
           (route) => false,

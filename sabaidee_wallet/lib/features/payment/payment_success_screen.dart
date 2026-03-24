@@ -195,7 +195,7 @@ class PaymentSuccessSheet extends StatelessWidget {
                 elevation: 0,
               ),
               child: const Text(
-                'Close',
+                'ປິດ',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

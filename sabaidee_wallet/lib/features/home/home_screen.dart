@@ -1,23 +1,30 @@
 // lib/features/home/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+// Import ສ່ວນປະກອບຕ່າງໆ ຕາມ Structure
 import '../../core/core.dart';
-import '../../models/app_models.dart'; // ✅ ໃຊ້ app_models.dart (source of truth)
-// import '../../models/user_model.dart';  // ✗ ລົບອັນນີ້
+import '../../models/app_models.dart';
 import '../../services/wallet_service.dart';
 import '../../services/transaction_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/menu_drawer.dart';
 import '../../widgets/receive_sheet.dart';
 import '../../widgets/send_sheet.dart';
+
+// Import Home Sub-widgets
 import '../home/home_action_buttons.dart';
 import '../home/home_top_bar.dart';
 import '../home/home_recent_tx.dart';
 import '../home/home_bottom_nav.dart';
 import '../home/home_balance_card.dart';
 import '../home/home_history_btn.dart';
+
+// Navigation & Features
 import '../../features/scanner/qr_scanner_screen.dart';
 import '../../features/history/history_screen.dart';
+import '../../features/scanner/qr_utils.dart';
+import '../../features/payment/transfer_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -194,12 +201,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (result == null || !mounted) return;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          SendSheet(wallet: _wallet, invoice: result, onSuccess: _loadData),
-    );
+    final qrType = detectQRType(result);
+
+    if (qrType == QRType.laoQR) {
+      // ✅ LAO QR → ໄປໜ້າ TransferScreen ແທນ LaoQRPaySheet
+      final qrInfo = LaoQRInfo.fromRaw(result);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TransferScreen(
+            senderName: _user?.name ?? 'Sabaidee Wallet',
+            senderAccount: 'ສາບາຍດີ Wallet',
+            receiverName: qrInfo.merchantName,
+            receiverAccount: qrInfo.bank,
+          ),
+        ),
+      );
+    } else {
+      // ⚡ Lightning → ໃຊ້ SendSheet ຄືເດີມ
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) =>
+            SendSheet(wallet: _wallet, invoice: result, onSuccess: _loadData),
+      );
+    }
   }
 }

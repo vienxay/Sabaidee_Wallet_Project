@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/kyc_status.dart';
 import 'kyc_service.dart';
 import 'storage_service.dart';
+import 'daily_limit_service.dart';
 
 const double kKycDailyLimit = 5_000_000;
 const _kStatus = 'user_kyc_status_v1';
@@ -42,7 +43,10 @@ class KycGateService {
     required double amount,
     required VoidCallback onKycCompleted,
   }) async {
-    if (amount <= kKycDailyLimit) return true;
+    // ✅ ດຶງ limit ຕາມ KYC status ປັດຈຸບັນ
+    final limit = await DailyLimitService.instance.getDailyLimit();
+
+    if (amount <= limit) return true; // ✅ ໃຊ້ dynamic limit
 
     final status = await getStatus();
 

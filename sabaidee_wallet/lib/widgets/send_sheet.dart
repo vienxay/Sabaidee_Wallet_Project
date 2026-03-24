@@ -268,7 +268,7 @@ class _SendSheetState extends State<SendSheet> {
               color: AppColors.inputBackground,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppColors.primary.withOpacity(0.4),
+                color: AppColors.primary.withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
