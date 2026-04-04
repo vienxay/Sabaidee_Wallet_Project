@@ -95,7 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.scaffoldBg,
-      drawer: const MenuDrawer(),
+      drawer: MenuDrawer(
+        balanceSats: _wallet?.balanceSats ?? 0,
+        balanceLAK: (_wallet?.balanceLAK ?? 0.0).toDouble(),
+      ),
       body: SafeArea(child: _buildBody()),
       bottomNavigationBar: HomeBottomNav(
         selectedIndex: _selectedIndex,

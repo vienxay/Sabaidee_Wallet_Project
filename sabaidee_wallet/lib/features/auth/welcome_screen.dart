@@ -50,13 +50,13 @@ class WelcomeScreen extends StatelessWidget {
               const Spacer(),
               // ✅ named routes — ບໍ່ import screen ໂດຍກົງ
               CustomButton(
-                text: 'Sign Up',
+                text: 'ລົງທະບຽນ',
                 backgroundColor: AppColors.primary,
                 onPressed: () => Navigator.pushNamed(context, '/register'),
               ),
               const SizedBox(height: 16),
               CustomButton(
-                text: 'Already have an account',
+                text: 'ມີບັນຊີຢູ່ແລ້ວ',
                 backgroundColor: AppColors.inputBackground,
                 textColor: AppColors.textSecondary,
                 onPressed: () => Navigator.pushNamed(context, '/login'),

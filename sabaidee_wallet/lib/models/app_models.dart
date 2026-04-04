@@ -4,8 +4,12 @@
 // ─── User Model ───────────────────────────────────────────────────────────────
 class UserModel {
   final String id;
-  final String name;
+  final String name; // ໃຊ້ເປັນ firstName ກໍໄດ້ ຫຼື name ຄືເກົ່າ
+  final String? lastName; // ເພີ່ມໃໝ່
   final String email;
+  final String? phone; // ເພີ່ມໃໝ່
+  final String? dob; // ວັນເກີດ
+  final String? gender; // ເພດ
   final String? profileImage;
   final String kycStatus;
   final DateTime? createdAt;
@@ -13,16 +17,24 @@ class UserModel {
   const UserModel({
     required this.id,
     required this.name,
+    this.lastName,
     required this.email,
+    this.phone,
+    this.dob,
+    this.gender,
     this.profileImage,
     required this.kycStatus,
     this.createdAt,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> j) => UserModel(
-    id: j['id'] as String? ?? '',
-    name: j['name'] as String? ?? '',
+    id: j['id'] as String? ?? j['_id'] as String? ?? '', // ຮອງຮັບທັງ id ແລະ _id
+    name: j['name'] as String? ?? j['firstName'] as String? ?? '',
+    lastName: j['lastName'] as String?,
     email: j['email'] as String? ?? '',
+    phone: j['phone'] as String? ?? j['phoneNumber'] as String?,
+    dob: j['dob'] as String? ?? j['birthDate'] as String?,
+    gender: j['gender'] as String?,
     profileImage: j['profileImage']?.toString(),
     kycStatus: j['kycStatus'] as String? ?? 'pending',
     createdAt: j['createdAt'] != null
@@ -33,7 +45,11 @@ class UserModel {
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
+    'lastName': lastName,
     'email': email,
+    'phone': phone,
+    'dob': dob,
+    'gender': gender,
     'profileImage': profileImage,
     'kycStatus': kycStatus,
   };

@@ -65,4 +65,9 @@ class AppConstants {
 
   // ─── App Config ────────────────────────────────────────────────────────────────
   static const String appScheme = 'sabaidee'; // deep-link: sabaidee://
+
+  // Withdrawal endpoints
+  static const String withdrawalLimitStatus = '/api/withdrawal/limit-status';
+  static const String withdrawalPreview = '/api/withdrawal/preview';
+  static const String withdrawalSend = '/api/withdrawal/send';
 }

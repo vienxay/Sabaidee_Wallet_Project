@@ -130,7 +130,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 24),
               CustomButton(
-                text: 'Send',
+                text: 'ສົ່ງ',
                 isLoading: _isLoading,
                 onPressed: _isLoading ? null : _sendOtp,
               ),

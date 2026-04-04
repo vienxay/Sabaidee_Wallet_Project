@@ -8,22 +8,26 @@ class PaymentDetailScreen extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'ມັງກອນ',
+      'ກຸມພາ',
+      'ມີນາ',
+      'ເມສາ',
+      'ພຶດສະພາ',
+      'ມິຖຸນາ',
+      'ກໍລະກົດ',
+      'ສິງຫາ',
+      'ກັນຍາ',
+      'ຕຸລາ',
+      'ພະຈິກ',
+      'ທັນວາ',
     ];
+
+    // ໃຊ້ padLeft ເພື່ອໃຫ້ເວລາເປັນ 09:05 ແທນ 9:5
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}  $h:$m';
+
+    // ຜົນລັດ: 24 ມີນາ 2026, 22:57
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}, $h:$m';
   }
 
   @override
@@ -70,7 +74,7 @@ class PaymentDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Row(label: 'Time', value: _formatDate(tx.createdAt)),
+              _Row(label: 'Time', value: _formatDate(tx.createdAt.toLocal())),
               const Divider(height: 24, color: AppColors.divider),
 
               const Text(

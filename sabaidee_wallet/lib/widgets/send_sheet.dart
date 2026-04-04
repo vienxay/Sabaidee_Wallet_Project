@@ -1,8 +1,6 @@
-// ─── send_sheet.dart ─────────────────────────────────────────────────────────
-// ໜ້າຈໍຫຼັກສຳລັບການສົ່ງເງິນ
-// ຈັດການ: QR detection, Lightning invoice input, Lightning confirm
-
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../core/core.dart';
 import '../models/app_models.dart';
 import '../services/payment_service.dart';
@@ -26,13 +24,11 @@ class SendSheet extends StatefulWidget {
 class _SendSheetState extends State<SendSheet> {
   final _invoiceCtrl = TextEditingController();
   final _amountSatsCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
 
   bool _loading = false;
   String? _error;
   DecodedInvoiceModel? _decoded;
   LaoQRInfo? _laoQRInfo;
-  bool _showBTC = true;
 
   @override
   void initState() {
@@ -40,7 +36,7 @@ class _SendSheetState extends State<SendSheet> {
     if (widget.invoice != null) {
       _invoiceCtrl.text = widget.invoice!;
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _handleRawInput(widget.invoice!),
+        (_) => _processInput(widget.invoice!),
       );
     }
   }
@@ -49,75 +45,59 @@ class _SendSheetState extends State<SendSheet> {
   void dispose() {
     _invoiceCtrl.dispose();
     _amountSatsCtrl.dispose();
-    _descCtrl.dispose();
     super.dispose();
   }
 
-  // ─── ກວດສອບປະເພດ QR ─────────────────────────────────────────────────────
-  Future<void> _handleRawInput(String raw) async {
-    if (raw.trim().isEmpty) return;
-    switch (detectQRType(raw.trim())) {
-      case QRType.lightning:
-        await _decode(raw);
-      case QRType.laoQR:
-        setState(() {
-          _laoQRInfo = LaoQRInfo.fromRaw(raw.trim());
-          _error = null;
-        });
-      case QRType.unknown:
-        await _decode(raw);
-    }
-  }
+  Future<void> _processInput(String raw) async {
+    final input = raw.trim();
+    if (input.isEmpty) return;
 
-  // ─── Decode Lightning Invoice ─────────────────────────────────────────────
-  Future<void> _decode([String? raw]) async {
-    final input = (raw ?? _invoiceCtrl.text).trim();
-    if (input.isEmpty) {
-      setState(() => _error = 'ກະລຸນາໃສ່ Lightning Invoice');
-      return;
-    }
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    final res = await PaymentService.instance.decodeInvoice(input);
+    final type = detectQRType(input);
 
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      if (res.success) {
-        _decoded = res.data;
-        if (res.data != null && res.data!.amountSats > 0) {
-          _amountSatsCtrl.text = res.data!.amountSats.toString();
+    if (type == QRType.laoQR) {
+      setState(() {
+        _laoQRInfo = LaoQRInfo.fromRaw(input);
+        _loading = false;
+      });
+    } else {
+      final res = await PaymentService.instance.decodeInvoice(input);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (res.success && res.data != null) {
+          _decoded = res.data;
+          if (_decoded!.amountSats > 0) {
+            _amountSatsCtrl.text = _decoded!.amountSats.toString();
+          }
+        } else {
+          _error = res.message.isNotEmpty ? res.message : 'Invoice ບໍ່ຖືກຕ້ອງ';
         }
-      } else {
-        _error = res.message;
-      }
-    });
+      });
+    }
   }
 
-  // ─── Pay Lightning ────────────────────────────────────────────────────────
   Future<void> _pay() async {
     if (_decoded == null) return;
 
-    final sats = int.tryParse(_amountSatsCtrl.text.trim());
-    if (sats == null || sats <= 0) {
+    int sats = _decoded!.amountSats;
+    if (sats <= 0) {
+      sats = int.tryParse(_amountSatsCtrl.text.trim()) ?? 0;
+    }
+
+    if (sats <= 0) {
       setState(() => _error = 'ກະລຸນາໃສ່ຈຳນວນ sats ທີ່ຖືກຕ້ອງ');
       return;
     }
 
-    final rootNav = Navigator.of(context, rootNavigator: true);
-    final localNav = Navigator.of(context);
-
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
+    setState(() => _loading = true);
     final res = await PaymentService.instance.pay(
       paymentRequest: _invoiceCtrl.text.trim(),
-      memo: _descCtrl.text.trim(),
+      memo: _decoded!.description,
       amountSats: _decoded!.amountSats == 0 ? sats : null,
     );
 
@@ -125,89 +105,53 @@ class _SendSheetState extends State<SendSheet> {
     setState(() => _loading = false);
 
     if (res.success) {
-      localNav.pop();
+      Navigator.pop(context);
       widget.onSuccess?.call();
+
       showModalBottomSheet(
-        context: rootNav.context,
+        context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
         builder: (_) => PaymentSuccessSheet(
-          senderName: 'Sabaidee wallet',
+          senderName: 'Sabaidee Wallet',
           receiverName: _decoded!.description.isNotEmpty
               ? _decoded!.description
-              : 'Unknown',
+              : 'Unknown Merchant',
           amountLAK: _decoded!.amountLAK.toDouble(),
-          amountSats: _decoded!.amountSats,
+          amountSats: sats,
+          memo: _decoded!.description,
         ),
       );
     } else {
-      localNav.pop();
-      await PaymentErrorDialog.show(
-        rootNav.context,
-        errorInfo: PaymentErrorInfo.fromApiResponse({
-          'message': res.message,
-          'requireKYC': res.requireKYC,
-        }),
-        onRetry: () => showModalBottomSheet(
-          context: rootNav.context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => SendSheet(
-            wallet: widget.wallet,
-            invoice: widget.invoice,
-            onSuccess: widget.onSuccess,
-          ),
-        ),
-        onGoToKYC: () => rootNav.pushNamed('/kyc'),
-      );
+      _handleError(res);
     }
   }
 
-  // ─── Scan QR ──────────────────────────────────────────────────────────────
-  Future<void> _scanQR() async {
-    final result = await Navigator.push<String>(
+  void _handleError(dynamic res) {
+    PaymentErrorDialog.show(
       context,
-      MaterialPageRoute(
-        builder: (_) => const QrScannerScreen(title: 'ສະແກນ QR'),
-      ),
+      errorInfo: PaymentErrorInfo.fromApiResponse({
+        'message': res.message,
+        'requireKYC': res.requireKYC,
+      }),
+      onRetry: () => _processInput(_invoiceCtrl.text),
+      onGoToKYC: () => Navigator.pushNamed(context, '/kyc'),
     );
-    if (result != null && result.isNotEmpty) {
-      _reset(keepInput: true);
-      _invoiceCtrl.text = result;
-      await _handleRawInput(result);
-    }
   }
 
-  // ─── Reset ────────────────────────────────────────────────────────────────
-  void _reset({bool keepInput = false}) => setState(() {
+  void _reset() => setState(() {
     _decoded = null;
     _laoQRInfo = null;
     _error = null;
-    _amountSatsCtrl.clear();
-    _descCtrl.clear();
-    if (!keepInput) _invoiceCtrl.clear();
+    _invoiceCtrl.clear();
   });
 
-  String get _convertedAmount {
-    final sats = int.tryParse(_amountSatsCtrl.text.trim()) ?? 0;
-    if (sats == 0) return '';
-    if (_showBTC) {
-      final lakRate = (_decoded?.amountSats ?? 0) > 0
-          ? (_decoded!.amountLAK / _decoded!.amountSats)
-          : 0.0;
-      final estimated = lakRate > 0 ? (sats * lakRate).round() : 0;
-      return estimated > 0 ? 'about $estimated LAK' : '';
-    }
-    return '${(sats / 100000000).toStringAsFixed(8)} BTC';
-  }
-
-  // ─── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading && _decoded == null && _laoQRInfo == null) {
       return _buildLoading();
     }
-    // LAO QR → delegate ໄປ LaoQRPaySheet
+
     if (_laoQRInfo != null) {
       return LaoQRPaySheet(
         qrInfo: _laoQRInfo!,
@@ -216,376 +160,223 @@ class _SendSheetState extends State<SendSheet> {
         onCancel: _reset,
       );
     }
-    if (_decoded != null) return _buildConfirmScreen();
-    return _buildInvoiceInput();
+
+    return _decoded != null ? _buildConfirmScreen() : _buildInvoiceInput();
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
   Widget _buildLoading() => Container(
-    height: 200,
+    height: 250,
     decoration: const BoxDecoration(
-      color: Color(0xFF1A1A1A),
+      color: AppColors.background,
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    child: const Center(
-      child: CircularProgressIndicator(color: Color(0xFFFFB300)),
-    ),
+    child: const Center(child: CircularProgressIndicator(color: Colors.orange)),
   );
 
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildInvoiceInput() => Container(
-    margin: const EdgeInsets.all(12),
-    padding: EdgeInsets.only(
-      left: 20,
-      right: 20,
-      top: 20,
-      bottom: MediaQuery.of(context).viewInsets.bottom + 28,
-    ),
-    decoration: BoxDecoration(
-      color: AppColors.background,
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: Colors.grey[300],
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // ── ປຸ່ມສະແກນໃຫຍ່ ──
-        GestureDetector(
-          onTap: _scanQR,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 20),
+  Widget _buildInvoiceInput() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
-              color: AppColors.inputBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.primary.withValues(alpha: 0.4),
-                width: 1.5,
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          const Text(
+            'ຈ່າຍເງິນ (Lightning / LAO QR)',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _invoiceCtrl,
+            decoration: InputDecoration(
+              hintText: 'ວາງ Invoice ຫຼື Scan QR Code',
+              prefixIcon: const Icon(Icons.bolt, color: Colors.orange),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.qr_code_scanner),
+                onPressed: () async {
+                  final code = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+                  );
+                  if (code != null) _processInput(code);
+                },
               ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onChanged: (val) => _processInput(val),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConfirmScreen() {
+    final formatCurrency = NumberFormat("#,##0", "en_US");
+
+    final double amountLak = _decoded?.amountLAK.toDouble() ?? 0.0;
+    final int amountSats = _decoded?.amountSats ?? 0;
+    final String description = _decoded?.description ?? 'Unknown Merchant';
+
+    final String balanceStr = widget.wallet != null
+        ? formatCurrency.format(widget.wallet!.balanceLAK)
+        : '0';
+
+    return Container(
+      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 32, top: 20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: const Icon(Icons.close, size: 28, color: Colors.black87),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Colors.orange,
+                size: 28,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$balanceStr LAK',
+                style: const TextStyle(
+                  color: Colors.orange,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               children: [
-                const Icon(
-                  Icons.qr_code_scanner,
-                  color: AppColors.primary,
-                  size: 40,
+                const Text(
+                  'Enter Amount',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${formatCurrency.format(amountLak)} LAK',
+                  style: const TextStyle(
+                    color: Colors.orange,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'ສະແກນ QR',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
                 Text(
-                  'LAO QR • Lightning Invoice',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        const Row(
-          children: [
-            Expanded(child: Divider(color: Colors.grey)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text('ຫຼື', style: TextStyle(color: Colors.grey)),
-            ),
-            Expanded(child: Divider(color: Colors.grey)),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        TextField(
-          controller: _invoiceCtrl,
-          maxLines: 3,
-          style: const TextStyle(fontSize: 13),
-          decoration: InputDecoration(
-            hintText: 'ວາງ Lightning Invoice (lnbc...)',
-            hintStyle: const TextStyle(color: AppColors.textGrey, fontSize: 13),
-            filled: true,
-            fillColor: AppColors.inputBackground,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            prefixIcon: const Icon(Icons.bolt, color: AppColors.primary),
-            errorText: _error,
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            onPressed: _loading
-                ? null
-                : () => _handleRawInput(_invoiceCtrl.text),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Decode / ຕໍ່ໄປ',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildConfirmScreen() {
-    final lak = widget.wallet?.balanceLAK ?? 0;
-    final isAmountless = _decoded!.amountSats == 0;
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 28,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[700],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  color: Color(0xFFFFB300),
-                  size: 16,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '$lak LAK',
+                  'Sats ${formatCurrency.format(amountSats)}',
                   style: const TextStyle(
-                    color: Color(0xFFFFB300),
+                    color: Colors.grey,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    fontSize: 15,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2A),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'ຈຳນວນ (sats)',
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
+                if (amountSats == 0) ...[
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: TextField(
                       controller: _amountSatsCtrl,
-                      enabled: isAmountless,
-                      keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isAmountless
-                            ? const Color(0xFFFFB300)
-                            : Colors.white60,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
-                      ),
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        hintText: '0',
-                        hintStyle: const TextStyle(color: Colors.white24),
-                        suffixIcon: isAmountless
-                            ? const Icon(
-                                Icons.edit,
-                                color: Color(0xFFFFB300),
-                                size: 18,
-                              )
-                            : null,
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    GestureDetector(
-                      onTap: () => setState(() => _showBTC = !_showBTC),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _showBTC ? 'BTC' : 'LAK',
-                            style: const TextStyle(
-                              color: Color(0xFFFFB300),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.swap_vert,
-                            color: Colors.white38,
-                            size: 18,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _convertedAmount,
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const Divider(color: Colors.white12, height: 28),
-                    const Text(
-                      'ລາຍລະອຽດການຈ່າຍ',
-                      style: TextStyle(color: Colors.white38, fontSize: 12),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _descCtrl,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
                       decoration: const InputDecoration(
-                        hintText: 'ຂຽນລາຍລະອຽດການຈ່າຍ...',
-                        hintStyle: TextStyle(color: Colors.white24),
-                        border: InputBorder.none,
+                        hintText: 'ປ້ອນຈຳນວນ Sats',
                         isDense: true,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            const Icon(Icons.bolt, color: Color(0xFFFFB300), size: 32),
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                _decoded!.description.isNotEmpty
-                    ? _decoded!.description
-                    : 'Lightning Payment',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white38, fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _reset,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF5252),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _pay,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: _loading
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              'Send',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
+                      keyboardType: TextInputType.number,
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          const SizedBox(height: 24),
+          const Icon(Icons.bolt, color: Colors.orange, size: 56),
+          const SizedBox(height: 16),
+          Text(
+            'Pay to Wallet of Sabaidee Wallet user:\n$description',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.black87,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 40),
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton(
+              onPressed: _loading ? null : _pay,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _loading
+                  ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'ຈ່າຍ',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

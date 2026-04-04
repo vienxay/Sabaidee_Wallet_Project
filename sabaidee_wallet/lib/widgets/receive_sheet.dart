@@ -128,7 +128,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Receive',
+                'ໜ້າຮັບ',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -182,7 +182,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
               controller: _amountCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                hintText: 'ຈຳນວນ sats (ເຊັ່ນ: 1000)',
+                hintText: 'ຈຳນວນເງິນ LAK',
                 hintStyle: const TextStyle(color: AppColors.textGrey),
                 filled: true,
                 fillColor: AppColors.inputBackground,
@@ -294,7 +294,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
                         ),
                       )
                     : Text(
-                        _invoice == null ? 'Create Invoice' : 'ສຳເນົາ Invoice',
+                        _invoice == null ? 'ສ້າງ Invoice' : 'ສຳເນົາ Invoice',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,

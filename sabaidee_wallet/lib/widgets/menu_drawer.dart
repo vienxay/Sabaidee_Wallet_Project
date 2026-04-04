@@ -1,10 +1,19 @@
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../core/core.dart';
+import '../features/withdraw/withdraw_screen.dart';
 
 class MenuDrawer extends StatefulWidget {
-  const MenuDrawer({super.key});
+  final int balanceSats;
+  final double balanceLAK;
+
+  const MenuDrawer({
+    super.key,
+    required this.balanceSats,
+    required this.balanceLAK,
+  });
 
   @override
   State<MenuDrawer> createState() => _MenuDrawerState();
@@ -12,6 +21,28 @@ class MenuDrawer extends StatefulWidget {
 
 class _MenuDrawerState extends State<MenuDrawer> {
   bool _isLoggingOut = false;
+
+  Future<void> _launchWhatsApp() async {
+    final phoneNumber =
+        "+856 20 55 740 336"; // ໃສ່ເບີ WhatsApp ຂອງທ່ານ (ແບບມີລະຫັດປະເທດ 85620...)
+    final message = "ສະບາຍດີ, ຂ້າພະເຈົ້າຕ້ອງການແຈ້ງບັນຫາ...";
+
+    // ສ້າງ URL ສຳລັບ WhatsApp
+    final url = Uri.parse(
+      "https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}",
+    );
+
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        // ຖ້າເປີດບໍ່ໄດ້ (ເຊັ່ນ: ບໍ່ມີແອັບ WhatsApp)
+        debugPrint("Could not launch $url");
+      }
+    } catch (e) {
+      debugPrint("Error: $e");
+    }
+  }
 
   // ─── Logout Logic ──────────────────────────────────────────────────────────
   Future<void> _logout() async {
@@ -120,14 +151,14 @@ class _MenuDrawerState extends State<MenuDrawer> {
             // ─── Menu Items ──────────────────────────────────────────────────
             _MenuItem(
               icon: Icons.location_on_outlined,
-              label: 'Find Merchants',
+              label: 'ຄົ້ນຫາຮ້ານຄ້າ',
               onTap: () {},
             ),
             _MenuItem(
               icon: Icons.language_outlined,
-              label: 'English',
+              label: 'ພາສາ',
               trailing: const Text(
-                'EN',
+                'LA',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.primary,
@@ -137,13 +168,29 @@ class _MenuDrawerState extends State<MenuDrawer> {
               onTap: () {},
             ),
             _MenuItem(
+              icon: Icons.payments_outlined,
+              label: 'ຖອນເງິນ',
+              onTap: () {
+                Navigator.pop(context); // ປິດ Drawer ກ່ອນ
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WithdrawScreen(
+                      balanceSats: widget.balanceSats,
+                      balanceLAK: widget.balanceLAK,
+                    ),
+                  ),
+                );
+              },
+            ),
+            _MenuItem(
               icon: Icons.headset_mic_outlined,
-              label: 'Support',
-              onTap: () {},
+              label: 'ແຈ້ງບັນຫາ',
+              onTap: _launchWhatsApp,
             ),
             _MenuItem(
               icon: Icons.settings_outlined,
-              label: 'Settings',
+              label: 'ການຕັ້ງຄ່າ',
               onTap: () {},
             ),
 

@@ -182,7 +182,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               // ✅ ໃຊ້ isLoading property
               CustomButton(
-                text: 'Sign Up',
+                text: 'ລົງທະບຽນ',
                 isLoading: _isLoading,
                 backgroundColor: AppColors.primary,
                 onPressed: _isLoading ? null : _handleSignUp,
@@ -197,14 +197,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Navigator.pushReplacementNamed(context, '/login'),
                   child: RichText(
                     text: const TextSpan(
-                      text: 'Already have an account? ',
+                      text: 'ມີບັນຊີຢູ່ແລ້ວ? ',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 15,
                       ),
                       children: [
                         TextSpan(
-                          text: 'Sign In',
+                          text: 'ເຂົ້າສູ່ລະບົບ',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.bold,

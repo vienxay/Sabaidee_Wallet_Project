@@ -80,7 +80,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           child: const Icon(Icons.close, color: AppColors.textDark),
         ),
         title: const Text(
-          'History',
+          'ປະຫວັດທຸລະກຳ',
           style: TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.w800,

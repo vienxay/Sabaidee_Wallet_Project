@@ -53,10 +53,12 @@ class HomeBottomNav extends StatelessWidget {
 
               Expanded(
                 child: _NavItem(
-                  icon: Icons.grid_view_rounded,
-                  label: 'ບໍລິການ',
+                  icon: Icons.person_rounded, // ປ່ຽນຈາກ grid_view ເປັນ person
+                  label: 'ໂປຣຟາຍ',
                   selected: selectedIndex == 2,
-                  onTap: () => onTap(2),
+                  onTap: () {
+                    Navigator.pushNamed(context, '/profile');
+                  },
                 ),
               ),
             ],

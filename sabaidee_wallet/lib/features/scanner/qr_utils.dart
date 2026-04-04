@@ -6,29 +6,45 @@
 
 enum QRType { unknown, lightning, laoQR }
 
-/// ກວດສອບປະເພດຂອງ QR string
 QRType detectQRType(String raw) {
   final trimmed = raw.trim();
   final lower = trimmed.toLowerCase();
 
-  // ── Lightning Invoice ──
-  if (lower.startsWith('lnbc') || lower.startsWith('lightning:')) {
+  // ── 1. ກວດ Lightning (ຈ່າຍດ້ວຍ Bitcoin) ──
+  // ກວດທັງ Invoice (lnbc) ແລະ Address (user@domain)
+  final isLnAddress = RegExp(
+    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+  ).hasMatch(trimmed);
+  if (lower.startsWith('lnbc') ||
+      lower.startsWith('lightning:') ||
+      isLnAddress) {
     return QRType.lightning;
   }
 
-  // ── LAO QR / EMV / LAPNET ──
-  if (trimmed.startsWith('00020101') ||
-      lower.contains('lapnet') ||
-      lower.contains('bcel') ||
-      lower.contains('ldb') ||
-      lower.contains('jdb') ||
-      lower.contains('mmoney') ||
-      RegExp(r'^\d{10,}$').hasMatch(trimmed)) {
+  // ── 2. ກວດ LaoQR ມາດຕະຖານ (ໃຊ້ໄດ້ແທ້ກັບທະນາຄານ) ──
+  if (trimmed.startsWith('000201')) {
     return QRType.laoQR;
   }
 
-  // ── ໂຄດສັ້ນ + ຕົວເລກ/ຕົວໜັງສືໃຫຍ່ → ສົມມຸດ LAO QR (demo) ──
-  if (RegExp(r'^[0-9A-Z]{8,}$').hasMatch(trimmed.toUpperCase())) {
+  // ── 3. ກວດ Keywords ທະນາຄານໃນລາວ ──
+  final laoKeywords = [
+    'lapnet',
+    'bcel',
+    'ldb',
+    'jdb',
+    'mmoney',
+    'onepay',
+    'one pay',
+  ];
+  if (laoKeywords.any((key) => lower.contains(key))) {
+    return QRType.laoQR;
+  }
+
+  // ── 4. ໂຕເດໂມ (Demo Logic) ──
+  // ໃຫ້ກວດເປັນອັນສຸດທ້າຍ! ຖ້າບໍ່ແມ່ນ Lightning ແລະ ບໍ່ແມ່ນ Standard LaoQR
+  // ແຕ່ເປັນຕົວເລກ 8 ຕົວຂຶ້ນໄປ ຫຼື ຕົວໜັງສືໃຫຍ່ ໃຫ້ສົມມຸດວ່າເປັນ LaoQR (Demo)
+  if (RegExp(r'^\d{8,15}$').hasMatch(trimmed) ||
+      RegExp(r'^[0-9A-Z]{8,}$').hasMatch(trimmed.toUpperCase())) {
     return QRType.laoQR;
   }
 

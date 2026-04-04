@@ -9,6 +9,7 @@ import 'features/auth/register_screen.dart';
 import 'features/auth/google_callback_screen.dart';
 import 'features/auth/forgot_password_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/profile/profile_screen.dart';
 import 'features/auth/security/otp_verification.dart';
 import 'features/auth/security/reset_password.dart';
 import 'features/kyc/kyc_screen.dart'; // ✅ ໃໝ່
@@ -139,6 +140,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
         '/otp-verification': (_) => const OtpVerificationScreen(),
         '/reset-password': (_) => const ResetPasswordScreen(),
         '/home': (_) => const HomeScreen(),
+        '/profile': (_) => const ProfileScreen(),
         '/kyc': (_) => const KycScreen(),
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
       },

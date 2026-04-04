@@ -38,7 +38,7 @@ class _TransferScreenState extends State<TransferScreen>
   late Animation<Offset> _slideAnim;
 
   // ── Quick amounts ──
-  static const _quickAmounts = ['50,000', '100,000', '200,000', '500,000'];
+  // static const _quickAmounts = ['50,000', '100,000', '200,000', '500,000'];
 
   // ✅ ເພີ່ມຫຼັງ static const _quickAmounts
   int _todaySpent = 0;
@@ -81,10 +81,10 @@ class _TransferScreenState extends State<TransferScreen>
     super.dispose();
   }
 
-  void _fillAmount(String label) {
-    _amountCtrl.text = label.replaceAll(',', '');
-    setState(() {});
-  }
+  // void _fillAmount(String label) {
+  //   _amountCtrl.text = label.replaceAll(',', '');
+  //   setState(() {});
+  // }
 
   void _onNext() {
     if (_formKey.currentState!.validate()) {
@@ -137,8 +137,8 @@ class _TransferScreenState extends State<TransferScreen>
                         const SizedBox(height: 12),
 
                         // ── Quick chips ──
-                        _buildQuickChips(),
-                        const SizedBox(height: 20),
+                        // _buildQuickChips(),
+                        // const SizedBox(height: 20),
 
                         // ── Memo ──
                         _buildLabel('ເນື້ອໃນ', required: true),
@@ -496,36 +496,36 @@ class _TransferScreenState extends State<TransferScreen>
     onChanged: (_) => setState(() {}),
   );
 
-  Widget _buildQuickChips() => Wrap(
-    spacing: 8,
-    children: _quickAmounts.map((amt) {
-      final isSelected = _amountCtrl.text == amt.replaceAll(',', '');
-      return GestureDetector(
-        onTap: () => _fillAmount(amt),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFE8820C) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFFE8820C)
-                  : Colors.grey.shade300,
-            ),
-          ),
-          child: Text(
-            '$amt ກີບ',
-            style: TextStyle(
-              color: isSelected ? Colors.white : const Color(0xFF555555),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-    }).toList(),
-  );
+  // Widget _buildQuickChips() => Wrap(
+  //   spacing: 8,
+  //   children: _quickAmounts.map((amt) {
+  //     final isSelected = _amountCtrl.text == amt.replaceAll(',', '');
+  //     return GestureDetector(
+  //       onTap: () => _fillAmount(amt),
+  //       child: AnimatedContainer(
+  //         duration: const Duration(milliseconds: 180),
+  //         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+  //         decoration: BoxDecoration(
+  //           color: isSelected ? const Color(0xFFE8820C) : Colors.white,
+  //           borderRadius: BorderRadius.circular(20),
+  //           border: Border.all(
+  //             color: isSelected
+  //                 ? const Color(0xFFE8820C)
+  //                 : Colors.grey.shade300,
+  //           ),
+  //         ),
+  //         child: Text(
+  //           '$amt ກີບ',
+  //           style: TextStyle(
+  //             color: isSelected ? Colors.white : const Color(0xFF555555),
+  //             fontSize: 12,
+  //             fontWeight: FontWeight.w600,
+  //           ),
+  //         ),
+  //       ),
+  //     );
+  //   }).toList(),
+  // );
 
   Widget _buildMemoField() => TextFormField(
     controller: _memoCtrl,

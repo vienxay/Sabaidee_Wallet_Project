@@ -71,7 +71,7 @@ class HomeActionButtons extends StatelessWidget {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      'ສົ່ງ',
+                      'ຈ່າຍເງິນ',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,

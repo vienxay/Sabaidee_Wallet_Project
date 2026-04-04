@@ -24,11 +24,11 @@ class TransferConfirmScreen extends StatefulWidget {
 
   const TransferConfirmScreen({
     super.key,
-    this.senderName = 'SabaideeWallet_Panyadeth',
-    this.senderAccount = 'LAK 123****890',
+    this.senderName = ' ',
+    this.senderAccount = ' ',
     this.senderAvatarUrl,
-    this.receiverName = 'Viengxay Resturant',
-    this.receiverAccount = 'LAK 123****890',
+    this.receiverName = ' ',
+    this.receiverAccount = ' ',
     this.receiverAvatarUrl,
     required this.amountLAK,
     this.feeLAK = 0,
@@ -276,7 +276,7 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
 
           // ── ຫາ ──
           _buildAccountRow(
-            label: 'ທາບັນຊີ',
+            label: 'ຫາບັນຊີ',
             name: widget.receiverName,
             account: widget.receiverAccount,
             avatarUrl: widget.receiverAvatarUrl,
@@ -401,8 +401,8 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
         ),
         _divider(),
         _detailRow(
-          label: 'ເຫດໃດ:',
-          value: widget.memo.isEmpty ? '..................' : widget.memo,
+          label: 'ເນື້ອໃນ:',
+          // value: widget.memo.isEmpty ? '..................' : widget.memo,
           valueColor: widget.memo.isEmpty
               ? Colors.grey[400]!
               : const Color(0xFF1A1A1A),

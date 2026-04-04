@@ -1,6 +1,6 @@
 // lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+// import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
@@ -18,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  bool _isGoogleLoading = false;
+  // bool _isGoogleLoading = false;
 
   @override
   void dispose() {
@@ -47,25 +47,25 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ✅ Google Login — ເປີດ browser ໄປ backend OAuth
-  Future<void> _loginWithGoogle() async {
-    setState(() => _isGoogleLoading = true);
+  // Future<void> _loginWithGoogle() async {
+  //   setState(() => _isGoogleLoading = true);
 
-    try {
-      final uri = Uri.parse(
-        '${AppConstants.apiBaseUrl}${AppConstants.authGoogle}',
-      );
+  //   try {
+  //     final uri = Uri.parse(
+  //       '${AppConstants.apiBaseUrl}${AppConstants.authGoogle}',
+  //     );
 
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        throw Exception('ບໍ່ສາມາດເປີດ Google Login ໄດ້');
-      }
-      // ✅ ຫຼັງຈາກນີ້ GoogleCallbackScreen ຈະຮັບ deep link ອັດຕະໂນມັດ
-    } catch (e) {
-      if (!mounted) return;
-      _showError(e.toString().replaceAll('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _isGoogleLoading = false);
-    }
-  }
+  //     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+  //       throw Exception('ບໍ່ສາມາດເປີດ Google Login ໄດ້');
+  //     }
+  //     // ✅ ຫຼັງຈາກນີ້ GoogleCallbackScreen ຈະຮັບ deep link ອັດຕະໂນມັດ
+  //   } catch (e) {
+  //     if (!mounted) return;
+  //     _showError(e.toString().replaceAll('Exception: ', ''));
+  //   } finally {
+  //     if (mounted) setState(() => _isGoogleLoading = false);
+  //   }
+  // }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context)
@@ -174,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     child: const Text(
-                      'Forgot Password',
+                      'ລື່ມລະຫັດຜ່ານ',
                       style: TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -183,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // ── Sign In Button ─────────────────────────────────────────
                 CustomButton(
-                  text: 'Sign In',
+                  text: 'ເຂົ້າສູ່ລະບົບ',
                   isLoading: _isLoading,
                   backgroundColor: AppColors.primary, // ✅ AppColors.primary
                   onPressed: _isLoading ? null : _login,
@@ -191,22 +191,22 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 28),
 
                 // ── Divider ───────────────────────────────────────────────
-                const _OrDivider(),
-                const SizedBox(height: 28),
+                // const _OrDivider(),
+                // const SizedBox(height: 28),
 
                 // ── Google Button ─────────────────────────────────────────
-                CustomButton(
-                  text: 'Continue with Google',
-                  textColor: AppColors.textSecondary,
-                  variant: ButtonVariant.outlined,
-                  isLoading: _isGoogleLoading, // ✅ loading state
-                  icon: Image.asset(
-                    'assets/images/google-logo.png',
-                    height: 22,
-                    width: 22,
-                  ),
-                  onPressed: _isGoogleLoading ? null : _loginWithGoogle, // ✅
-                ),
+                // CustomButton(
+                //   text: 'Continue with Google',
+                //   textColor: AppColors.textSecondary,
+                //   variant: ButtonVariant.outlined,
+                //   isLoading: _isGoogleLoading, // ✅ loading state
+                //   icon: Image.asset(
+                //     'assets/images/google-logo.png',
+                //     height: 22,
+                //     width: 22,
+                //   ),
+                //   onPressed: _isGoogleLoading ? null : _loginWithGoogle, // ✅
+                // ),
                 const SizedBox(height: 32),
 
                 // ── Sign Up Link ──────────────────────────────────────────
@@ -215,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        "Don't have an account? ",
+                        "ຍັງບໍ່ມີບັນຊີ? ",
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -224,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       GestureDetector(
                         onTap: () => Navigator.pushNamed(context, '/register'),
                         child: Text(
-                          'Sign Up!',
+                          'ລົງທະບຽນ!',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontSize: 14,
@@ -247,23 +247,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
 // ── Sub Widgets ───────────────────────────────────────────────────────────────
 
-class _OrDivider extends StatelessWidget {
-  const _OrDivider();
+// class _OrDivider extends StatelessWidget {
+//   const _OrDivider();
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(thickness: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'or continue with',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-        ),
-        const Expanded(child: Divider(thickness: 1)),
-      ],
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Row(
+//       children: [
+//         const Expanded(child: Divider(thickness: 1)),
+//         Padding(
+//           padding: const EdgeInsets.symmetric(horizontal: 12),
+//           child: Text(
+//             'or continue with',
+//             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+//           ),
+//         ),
+//         const Expanded(child: Divider(thickness: 1)),
+//       ],
+//     );
+//   }
+// }
