@@ -90,6 +90,8 @@ const kycLimiter = rateLimit({
     legacyHeaders: false,
 })
 
+const withdrawalRoutes = require('./src/routes/withdrawalRoutes');
+
 app.use('/api/', limiter)
 app.use('/api/auth/login',           authLimiter)
 app.use('/api/auth/register',        authLimiter)
@@ -103,6 +105,7 @@ app.use('/api/wallet',       require('./src/routes/walletRoutes'))        // ເ
 app.use('/api/payment',      require('./src/routes/paymentRoutes'))       // ໃໝ່
 app.use('/api/transactions', require('./src/routes/transactionRoutes'))   // ໃໝ່
 app.use('/api/kyc',          require('./src/routes/kycRoutes'))           // ໃໝ່
+app.use('/api/withdrawal', withdrawalRoutes);
 
 // ─── Deep Link Redirects ──────────────────────────────────────────────────────
 app.get('/open/home', (req, res) => {

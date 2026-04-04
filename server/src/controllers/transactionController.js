@@ -74,17 +74,20 @@ exports.checkPaymentStatus = async (req, res) => {
 
         const status = await lnbits.checkPayment({ invoiceKey: wallet.invoiceKey, paymentHash });
 
+        // ໃນ checkPaymentStatus
         if (status.paid) {
-            const transaction = await Transaction.findOneAndUpdate(
-                { paymentHash, user: req.user._id },
-                { status: 'success' },
-                { new: true }
-            );
+            const transaction = await Transaction.findOne({ paymentHash, user: req.user._id });
 
-            if (transaction?.type === 'topup') {
-                const balance = await lnbits.getBalance(wallet.invoiceKey);
-                wallet.balanceSats = balance.balanceSats;
-                await wallet.save();
+            // ໃຫ້ອັບເດດ Balance ສະເພາະຕອນທີ່ Status ຍັງເປັນ pending ເທົ່ານັ້ນ
+            if (transaction && transaction.status === 'pending') {
+                transaction.status = 'success';
+                await transaction.save();
+
+                if (transaction.type === 'topup') {
+                    const balance = await lnbits.getBalance(wallet.invoiceKey);
+                    wallet.balanceSats = balance.balanceSats;
+                    await wallet.save();
+                }
             }
         }
 

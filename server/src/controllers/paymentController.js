@@ -20,6 +20,11 @@ const LAO_QR_LIMIT = {
     verified:   100_000_000, // 20,000,000 ກີບ/ມື້ — KYC ແລ້ວ
 };
 
+// ເພີ່ມ Helper ກວດ Email format
+const isLightningAddress = (address) => {
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(address);
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════════════
@@ -42,6 +47,53 @@ const getDailySpentLAK = async (userId) => {
     ]);
 
     return result[0]?.total || 0;
+};
+
+
+exports.decodeInvoice = async (req, res) => {
+    try {
+        let { paymentRequest } = req.body;
+        paymentRequest = paymentRequest.trim();
+
+        // 1. ຖ້າເປັນ Lightning Address (user@domain.com)
+        if (isLightningAddress(paymentRequest)) {
+            const rate = await exchangeRate.getExchangeRate();
+            return res.status(200).json({
+                success: true,
+                isAddress: true, // ບອກ Flutter ວ່າແມ່ນ Address ເດີ
+                payee: paymentRequest,
+                amountSats: 0,   // ໃຫ້ໄປປ້ອນເອງຢູ່ UI
+                description: `Pay to ${paymentRequest}`,
+                rate: {
+                    btcToLAK: rate.btcToLAK,
+                    btcToUSD: rate.btcToUSD,
+                },
+            });
+        }
+
+        // 2. ຖ້າເປັນ Bolt11 Invoice (lnbc...) ແບບເດີມ
+        const [decoded, rate] = await Promise.all([
+            lnbits.decodeInvoice(paymentRequest),
+            exchangeRate.getExchangeRate(),
+        ]);
+
+        const amountLAK = await exchangeRate.convertSatsToLAK(decoded.amountSats);
+
+        res.status(200).json({
+            success: true,
+            isAddress: false,
+            amountSats: decoded.amountSats,
+            amountLAK,
+            description: decoded.description,
+            rate: {
+                btcToLAK: rate.btcToLAK,
+                btcToUSD: rate.btcToUSD,
+            },
+        });
+    } catch (error) {
+        console.error('Decode Error:', error);
+        return res.status(500).json({ success: false, message: 'ຂໍ້ມູນ QR ບໍ່ຖືກຕ້ອງ' });
+    }
 };
 
 // ✅ ເພີ່ມ: LAO QR daily spending

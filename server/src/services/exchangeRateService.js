@@ -69,15 +69,15 @@ exports.getExchangeRate = async () => {
 };
 
 // ─── convertSatsToLAK ──────────────────────────────────────────────────────
+exports.convertLAKToSats = async (lak) => {
+    const rate = await exports.getExchangeRate();
+    const btc = lak / rate.btcToLAK;
+    return Math.round(btc * 100_000_000); // BTC → sats
+};
+
+// ─── convertLAKtoSats ──────────────────────────────────────────────────────
 exports.convertSatsToLAK = async (sats) => {
     const rate = await exports.getExchangeRate();
     const btc = sats / 100_000_000; // sats → BTC
     return Math.round(btc * rate.btcToLAK);
-};
-
-// ─── convertLAKtoSats ──────────────────────────────────────────────────────
-exports.convertLAKtoSats = async (lak) => {
-    const rate = await exports.getExchangeRate();
-    const btc = lak / rate.btcToLAK;
-    return Math.round(btc * 100_000_000); // BTC → sats
 };

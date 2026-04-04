@@ -11,9 +11,18 @@ const headers = (key) => ({
 });
 
 // ─── Helper: ຈັດການ error ─────────────────────────────────────────────────────
+// ─── Helper: ຈັດການ error ─────────────────────────────────────────────────────
 const handleError = (error, label) => {
-  const detail = error.response?.data?.detail || error.message;
-  console.error(`❌ LNbits [${label}]:`, detail);
+  // 1. ດຶງຂໍ້ມູນ Error ລະອຽດທີ່ LNbits ສົ່ງກັບມາ (ຖ້າມີ)
+  const responseData = error.response?.data;
+  const status = error.response?.status;
+
+  // 2. ສະແດງ Log ໃນ Terminal ຂອງ Server ເພື່ອໃຫ້ເຮົາ Debug ງ່າຍຂຶ້ນ
+  console.error(`❌ LNbits [${label}] Error Status:`, status);
+  console.error(`❌ LNbits [${label}] Error Detail:`, JSON.stringify(responseData, null, 2));
+
+  // 3. ດຶງຂໍ້ຄວາມ Error ໄປ throw ໃຫ້ Controller
+  const detail = responseData?.detail || responseData?.message || error.message;
   throw new Error(detail);
 };
 
@@ -108,23 +117,28 @@ const lnbitsService = {
   },
 
   // ─── 5. Decode Invoice ──────────────────────────────────────────────────────
+  // ແກ້ໄຂບ່ອນ Method decodeInvoice
   decodeInvoice: async (paymentRequest) => {
-    try {
-      const { data } = await axios.post(
-        `${LNBITS_URL()}/api/v1/payments/decode`,
-        { data: paymentRequest },
-        { headers: headers(ADMIN_KEY()) },
-      );
-      return {
-        amountSats:  Math.floor((data.amount_msat || 0) / 1000),
-        description: data.description || '',
-        paymentHash: data.payment_hash,
-        expiry:      data.expiry,
-      };
-    } catch (error) {
-      handleError(error, 'decodeInvoice');
-    }
-  },
+  try {
+    // 💡 ເພີ່ມການ Clean string: ຕັດ lightning: ອອກ ແລະ ຕັດຊ່ອງວ່າງ (Space)
+    const cleanInvoice = paymentRequest.replace(/^lightning:/i, '').trim();
+
+    const { data } = await axios.post(
+      `${LNBITS_URL()}/api/v1/payments/decode`,
+      { data: cleanInvoice }, // ສົ່ງຄ່າທີ່ Clean ແລ້ວໄປ
+      { headers: headers(ADMIN_KEY()) }
+    );
+    
+    return {
+      amountSats: Math.floor((data.amount_msat || data.msat || 0) / 1000),
+      description: data.description || '',
+      paymentHash: data.payment_hash,
+      expiry: data.expiry,
+    };
+  } catch (error) {
+    handleError(error, 'decodeInvoice');
+  }
+},
 
   // ─── 6. ກວດສະຖານະ Invoice ──────────────────────────────────────────────────
   checkPaymentStatus: async ({ invoiceKey, paymentHash }) => {
@@ -142,5 +156,7 @@ const lnbitsService = {
     }
   },
 };
+
+
 
 module.exports = lnbitsService;
