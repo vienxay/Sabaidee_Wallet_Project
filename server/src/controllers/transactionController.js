@@ -72,7 +72,7 @@ exports.checkPaymentStatus = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        const status = await lnbits.checkPayment({ invoiceKey: wallet.invoiceKey, paymentHash });
+        const status = await lnbits.checkPaymentStatus({ invoiceKey: wallet.invoiceKey, paymentHash });
 
         // ໃນ checkPaymentStatus
         if (status.paid) {
