@@ -1,19 +1,12 @@
-// payment_bottom_sheet.dart
-// ✅ ໃຊ້ http ^1.6.0 + flutter_secure_storage
-// ✅ ດຶງ token ອັດຕະໂນມັດ — ບໍ່ຕ້ອງ pass authToken
-// ✅ Dialog error ເດັງຂ້າງເທິງທຸກ layer
-// ✅ ngrok-skip-browser-warning header
-
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'payment_error_dialog.dart';
-// ເພີ່ມ import ກ່ອນ
-import 'payment_success_screen.dart';
 
-const String _baseUrl =
-    'https://unpluralized-membranophonic-saniya.ngrok-free.dev';
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+
+import '../../core/app_constants.dart';
+import 'payment_error_dialog.dart';
+import 'payment_success_screen.dart';
 
 class PaymentBottomSheet extends StatefulWidget {
   final String paymentRequest;
@@ -54,7 +47,7 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
 
   Future<String?> _getToken() async {
     const storage = FlutterSecureStorage();
-    return await storage.read(key: 'auth_token');
+    return await storage.read(key: AppConstants.tokenKey);
   }
 
   Future<void> _handleSend() async {
@@ -64,7 +57,6 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. ດຶງ token
       final token = await _getToken();
       if (token == null) {
         if (!mounted) return;
@@ -74,7 +66,7 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
           rootNav.context,
           errorInfo: const PaymentErrorInfo(
             type: PaymentErrorType.general,
-            message: 'Session ໝົດອາຍຸ ກະລຸນາ Login ໃໝ່',
+            message: 'Session expired. Please log in again.',
           ),
           onRetry: () =>
               rootNav.pushNamedAndRemoveUntil('/login', (_) => false),
@@ -82,13 +74,12 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
         return;
       }
 
-      // 2. Call API ✅ ເພີ່ມ ngrok-skip-browser-warning
       final res = await http.post(
-        Uri.parse('$_baseUrl/api/payment/pay'),
+        Uri.parse('${AppConstants.apiBaseUrl}${AppConstants.paymentPay}'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true', // ✅ ແກ້ ngrok warning
+          'ngrok-skip-browser-warning': 'true',
         },
         body: jsonEncode({
           'paymentRequest': widget.paymentRequest,
@@ -105,19 +96,17 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
         final payment = body['payment'] as Map<String, dynamic>? ?? {};
         localNav.pop();
 
-        // ✅ ເພີ່ມຕໍ່ຈາກນີ້ເລີຍ
         showModalBottomSheet(
           context: rootNav.context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (_) => PaymentSuccessSheet(
             senderName: 'Sabaidee Wallet',
-            receiverName: widget.description.isNotEmpty
-                ? widget.description
-                : 'ຜູ້ຮັບ',
+            receiverName:
+                widget.description.isNotEmpty ? widget.description : 'Receiver',
             amountLAK: ((payment['amountLAK'] ?? 0) as num).toDouble(),
             amountSats: widget.amountSats,
-            feeLAK: (payment['feeSats'] ?? 0) as int,
+            feeLAK: (payment['feeLAK'] ?? 0) as int,
             memo: widget.description,
             closeToHome: false,
           ),
@@ -140,7 +129,7 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
         rootNav.context,
         errorInfo: const PaymentErrorInfo(
           type: PaymentErrorType.network,
-          message: 'ບໍ່ສາມາດເຊື່ອມຕໍ່ server ໄດ້\nກະລຸນາກວດສອບ internet',
+          message: 'Unable to reach the server.\nPlease check your internet.',
         ),
         onRetry: _handleSend,
       );
@@ -173,7 +162,7 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'ຈຳນວນ (sats)',
+            'Amount (sats)',
             style: TextStyle(color: Colors.white54, fontSize: 13),
           ),
           const SizedBox(height: 8),
@@ -187,7 +176,7 @@ class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'BTC ↑↓',
+            'BTC',
             style: TextStyle(color: Color(0xFFF59E0B), fontSize: 13),
           ),
           const SizedBox(height: 20),

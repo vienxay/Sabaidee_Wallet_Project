@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 class QrScannerScreen extends StatefulWidget {
   final String title;
-  const QrScannerScreen({super.key, this.title = 'ສະແກນ QR Code'});
+
+  const QrScannerScreen({super.key, this.title = 'Scan QR Code'});
 
   @override
   State<QrScannerScreen> createState() => _QrScannerScreenState();
@@ -14,8 +15,9 @@ class QrScannerScreen extends StatefulWidget {
 class _QrScannerScreenState extends State<QrScannerScreen> {
   final MobileScannerController _controller = MobileScannerController();
   final ImagePicker _picker = ImagePicker();
+
   bool _hasScanned = false;
-  bool _isProcessing = false; // ກັນກົດຊ້ຳຕອນດຶງຮູບ
+  bool _isProcessing = false;
 
   @override
   void dispose() {
@@ -23,7 +25,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     super.dispose();
   }
 
-  // ── ສະແກນຈາກກ້ອງ Live ──────────────────────────────────────
   void _onDetect(BarcodeCapture capture) {
     if (_hasScanned) return;
 
@@ -33,7 +34,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     _returnResult(value);
   }
 
-  // ── ເລືອກຮູບຈາກ Gallery ──────────────────────────────────────
   Future<void> _pickImageFromGallery() async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
@@ -47,7 +47,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
       if (image == null) {
         await _controller.start();
-        setState(() => _isProcessing = false);
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
         return;
       }
 
@@ -67,19 +69,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       if (e.code == 'photo_access_denied') {
         _showPermissionDialog();
       } else {
-        _showSnack('ບໍ່ສາມາດເປີດ Gallery ໄດ້: ${e.message}', isError: true);
+        _showSnack('Unable to open gallery: ${e.message}', isError: true);
       }
       await _controller.start();
     } catch (e) {
       if (!mounted) return;
-      _showSnack('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່', isError: true);
+      _showSnack('Something went wrong. Please try again.', isError: true);
       await _controller.start();
     } finally {
-      if (mounted) setState(() => _isProcessing = false);
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
-  // ── ສົ່ງຜົນກັບໄປ ─────────────────────────────────────────────
   void _returnResult(String value) {
     if (_hasScanned) return;
     setState(() => _hasScanned = true);
@@ -87,7 +90,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     Navigator.pop(context, value);
   }
 
-  // ── ແຈ້ງເຕືອນ ─────────────────────────────────────────────────
   void _showSnack(String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -104,25 +106,28 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('ບໍ່ພົບ QR Code'),
+        title: const Text('QR Code not found'),
         content: const Text(
-          'ບໍ່ສາມາດຊອກຫາ QR Code ໃນຮູບທີ່ເລືອກ\nກະລຸນາລອງເລືອກຮູບໃໝ່',
+          'No QR Code was found in the selected image.\nPlease choose another image.',
         ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // ປິດ Dialog
-              _controller.start(); // ເປີດ Camera ກັບ
+              Navigator.pop(context);
+              _controller.start();
             },
             child: const Text(
-              'ລອງໃໝ່',
+              'Try Again',
               style: TextStyle(color: Color(0xFFF5A623)),
             ),
           ),
           TextButton(
-            onPressed: _pickImageFromGallery, // ເລືອກຮູບໃໝ່ທັນທີ
+            onPressed: () {
+              Navigator.pop(context);
+              _pickImageFromGallery();
+            },
             child: const Text(
-              'ເລືອກຮູບໃໝ່',
+              'Choose Image',
               style: TextStyle(color: Color(0xFFF5A623)),
             ),
           ),
@@ -131,22 +136,23 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
-  // ✅ ເພີ່ມ Method ນີ້ໃໝ່
   void _showPermissionDialog() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('ຕ້ອງການສິດເຂົ້າເຖິງ Gallery'),
-        content: const Text('ກະລຸນາອະນຸຍາດການເຂົ້າເຖິງ Gallery ໃນການຕັ້ງຄ່າ'),
+        title: const Text('Gallery Permission Needed'),
+        content: const Text(
+          'Please allow gallery access in your device settings.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('ຍົກເລີກ'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text(
-              'ຕົກລົງ',
+              'OK',
               style: TextStyle(color: Color(0xFFF5A623)),
             ),
           ),
@@ -179,19 +185,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       ),
       body: Stack(
         children: [
-          // ── Camera View ──────────────────────────────────────
           MobileScanner(controller: _controller, onDetect: _onDetect),
-
-          // ── Frame ─────────────────────────────────────────────
           Center(
             child: Container(
               width: 260,
               height: 260,
               decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFF5A623), width: 3),
+                border: Border.all(color: Colors.transparent, width: 3),
                 borderRadius: BorderRadius.circular(16),
               ),
-              // ── ເສັ້ນມຸມ 4 ທິດ ─────────────────────────────
               child: Stack(
                 children: [
                   _corner(top: 0, left: 0, isTop: true, isLeft: true),
@@ -202,8 +204,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               ),
             ),
           ),
-
-          // ── Loading Overlay ───────────────────────────────────
           if (_isProcessing)
             Container(
               color: Colors.black54,
@@ -214,15 +214,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     CircularProgressIndicator(color: Color(0xFFF5A623)),
                     SizedBox(height: 16),
                     Text(
-                      'ກຳລັງວິເຄາະຮູບ...',
+                      'Analyzing image...',
                       style: TextStyle(color: Colors.white),
                     ),
                   ],
                 ),
               ),
             ),
-
-          // ── ປຸ່ມລຸ່ມ ──────────────────────────────────────────
           Positioned(
             bottom: 48,
             left: 24,
@@ -230,15 +228,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             child: Column(
               children: [
                 Text(
-                  'ວາງ QR Code ໃຫ້ຢູ່ໃນກອບ',
+                  'Place the QR code inside the frame',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.8),
                     fontSize: 15,
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                // ── ປຸ່ມເລືອກຮູບຈາກ Gallery ──────────────────
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -248,7 +244,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                       color: Color(0xFFF5A623),
                     ),
                     label: const Text(
-                      'ເລືອກຮູບຈາກ Gallery',
+                      'Choose Image From Gallery',
                       style: TextStyle(color: Color(0xFFF5A623), fontSize: 16),
                     ),
                     style: OutlinedButton.styleFrom(
@@ -268,7 +264,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     );
   }
 
-  // ── Widget ມຸມກອບ ─────────────────────────────────────────────
   Widget _corner({
     double? top,
     double? bottom,
@@ -288,16 +283,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         decoration: BoxDecoration(
           border: Border(
             top: isTop
-                ? const BorderSide(color: Colors.white, width: 3)
+                ? const BorderSide(color: Color(0xFFF5A623), width: 3)
                 : BorderSide.none,
             bottom: !isTop
-                ? const BorderSide(color: Colors.white, width: 3)
+                ? const BorderSide(color: Color(0xFFF5A623), width: 3)
                 : BorderSide.none,
             left: isLeft
-                ? const BorderSide(color: Colors.white, width: 3)
+                ? const BorderSide(color: Color(0xFFF5A623), width: 3)
                 : BorderSide.none,
             right: !isLeft
-                ? const BorderSide(color: Colors.white, width: 3)
+                ? const BorderSide(color: Color(0xFFF5A623), width: 3)
                 : BorderSide.none,
           ),
         ),

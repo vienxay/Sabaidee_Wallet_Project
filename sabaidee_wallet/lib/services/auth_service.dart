@@ -98,10 +98,11 @@ class AuthService {
     try {
       final res = await _api.get(AppConstants.authMe);
       if (res.success) return true;
-      await StorageService.instance.clearAll();
+      if (res.statusCode == 401) {
+        await StorageService.instance.clearAll();
+      }
       return false;
     } catch (_) {
-      await StorageService.instance.clearAll();
       return false;
     }
   }

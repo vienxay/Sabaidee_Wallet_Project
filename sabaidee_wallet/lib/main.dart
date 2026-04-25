@@ -1,23 +1,24 @@
-// lib/main.dart — Sabaidee Wallet (ອັບເດດ: ເພີ່ມ KYC route + sync)
+// lib/main.dart — Sabaidee Wallet
 
+import 'dart:async';
+
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'features/auth/welcome_screen.dart';
+import 'features/auth/forgot_password_screen.dart';
+import 'features/auth/google_callback_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/register_screen.dart';
-import 'features/auth/google_callback_screen.dart';
-import 'features/auth/forgot_password_screen.dart';
-import 'features/home/home_screen.dart';
-import 'features/profile/profile_screen.dart';
 import 'features/auth/security/otp_verification.dart';
 import 'features/auth/security/reset_password.dart';
-import 'features/kyc/kyc_screen.dart'; // ✅ ໃໝ່
+import 'features/auth/welcome_screen.dart';
+import 'features/home/home_screen.dart';
+import 'features/kyc/kyc_screen.dart';
+import 'features/profile/profile_screen.dart';
 import 'services/auth_service.dart';
+import 'services/kyc_gate_service.dart';
 import 'services/storage_service.dart';
-import 'services/kyc_gate_service.dart'; // ✅ ໃໝ່
-import 'package:app_links/app_links.dart';
-import 'dart:async';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,13 +35,22 @@ void main() async {
     ),
   );
 
-  await StorageService.instance.init();
-  final isLoggedIn = await AuthService.instance.isLoggedIn();
+  var isLoggedIn = false;
 
-  // ✅ Sync KYC status ຈາກ backend ທຸກຄັ້ງທີ່ app ເປີດ
-  // (ບໍ່ await — ໃຫ້ run background ບໍ່ block splash)
-  if (isLoggedIn) {
-    KycGateService.instance.syncFromBackend();
+  try {
+    await StorageService.instance.init().timeout(const Duration(seconds: 3));
+
+    isLoggedIn = await AuthService.instance.isLoggedIn().timeout(
+      const Duration(seconds: 3),
+      onTimeout: () => false,
+    );
+
+    if (isLoggedIn) {
+      KycGateService.instance.syncFromBackend();
+    }
+  } catch (e) {
+    debugPrint('Initialization error: $e');
+    isLoggedIn = false;
   }
 
   runApp(SabaideeWallet(isLoggedIn: isLoggedIn));
@@ -48,6 +58,7 @@ void main() async {
 
 class SabaideeWallet extends StatefulWidget {
   final bool isLoggedIn;
+
   const SabaideeWallet({super.key, required this.isLoggedIn});
 
   @override
@@ -66,13 +77,11 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
   }
 
   Future<void> _initDeepLinks() async {
-    // ✅ ຮັບ link ຕອນ app ເປີດຈາກ background
     final initialLink = await _appLinks.getInitialLink();
     if (initialLink != null) {
       _handleLink(initialLink);
     }
 
-    // ✅ ຮັບ link ຂະນະ app ເປີດຢູ່
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       _handleLink(uri);
     });
@@ -81,11 +90,9 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
   void _handleLink(Uri uri) async {
     if (uri.scheme != 'sabaidee') return;
 
-    // ✅ ກວດ login ກ່ອນ navigate ສະເໝີ
     final isLoggedIn = await AuthService.instance.isLoggedIn();
 
     if (!isLoggedIn) {
-      // ຍັງບໍ່ login → ໄປໜ້າ login ກ່ອນ ແລ້ວ redirect ຕໍ່
       _navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/login',
         (route) => false,
@@ -95,7 +102,6 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
 
     switch (uri.host) {
       case 'home':
-        // ✅ sync KYC ກ່ອນໄປໜ້າ home
         await KycGateService.instance.syncFromBackend();
         _navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/home',
@@ -125,7 +131,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     return MaterialApp(
       title: 'Sabaidee Wallet',
       debugShowCheckedModeBanner: false,
-      navigatorKey: _navigatorKey, // ✅ ສຳຄັນ
+      navigatorKey: _navigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),

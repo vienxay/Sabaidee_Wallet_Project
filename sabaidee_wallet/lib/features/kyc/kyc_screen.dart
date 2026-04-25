@@ -125,8 +125,8 @@ class _KycScreenState extends State<KycScreen> {
 
     setState(() => _loading = true);
     final result = await KycService.submitKyc(data: _data);
-    setState(() => _loading = false);
     if (!mounted) return;
+    setState(() => _loading = false);
 
     if (result['success'] == true) {
       await KycGateService.instance.saveStatus(KycStatus.submitted);
