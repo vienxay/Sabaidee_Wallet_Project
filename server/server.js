@@ -107,6 +107,8 @@ app.use('/api/transactions', require('./src/routes/transactionRoutes'))   // ໃ
 app.use('/api/kyc',          require('./src/routes/kycRoutes'))           // ໃໝ່
 app.use('/api/withdrawal', withdrawalRoutes);
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // ─── Deep Link Redirects ──────────────────────────────────────────────────────
 app.get('/open/home', (req, res) => {
     res.redirect('sabaidee://home')
