@@ -26,11 +26,15 @@ class AppConstants {
   static const String authVerifyOtp = '/api/auth/verify-otp';
   static const String authResetPass = '/api/auth/reset-password';
   static const String authGoogle = '/api/auth/google';
-  static const String authProfile = '/api/auth/profile';
-  static const String authPassword = '/api/auth/password';
+  // static const String authProfile = '/api/auth/profile';
+  // static const String authPassword = '/api/auth/password';
   static const String baseUrl = apiBaseUrl; // ✅ alias ສຳລັບ upload
   static const String authProfileImage =
       '/api/auth/profile/image'; // ✅ route ໃໝ່
+
+  // ─── Profile ─────────────────────────────────────────────────────────────────
+  static const String profileMe = '/api/profile/me'; // GET / PUT
+  static const String profileAvatar = '/api/profile/avatar'; // POST
 
   // ─── Wallet ──────────────────────────────────────────────────────────────────
   static const String wallet = '/api/wallet';

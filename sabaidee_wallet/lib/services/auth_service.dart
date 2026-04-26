@@ -62,10 +62,9 @@ class AuthService {
     );
   }
 
-  // ─── isLoggedIn ─────────────────────────────────────────────────────────────
+  // ─── isLoggedIn ─────────────────────────────────────────────────
   Future<bool> isLoggedIn() async {
     final token = await StorageService.instance.getToken();
-
     if (token == null || token.isEmpty) return false;
 
     try {
@@ -90,19 +89,11 @@ class AuthService {
         await StorageService.instance.clearAll();
         return false;
       }
+
+      // ✅ JWT valid → return true ເລີຍ ບໍ່ຕ້ອງ call API ຊ້ຳ
+      return true;
     } catch (_) {
       await StorageService.instance.clearAll();
-      return false;
-    }
-
-    try {
-      final res = await _api.get(AppConstants.authMe);
-      if (res.success) return true;
-      if (res.statusCode == 401) {
-        await StorageService.instance.clearAll();
-      }
-      return false;
-    } catch (_) {
       return false;
     }
   }

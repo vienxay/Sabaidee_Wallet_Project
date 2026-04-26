@@ -1,8 +1,10 @@
 // lib/services/api_client.dart
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../core/app_constants.dart';
-import 'storage_service.dart'; // ✅ import ໃຫ້ຖືກຕ້ອງ
+import 'storage_service.dart';
 
 class ApiResponse {
   final bool success;
@@ -21,76 +23,153 @@ class ApiResponse {
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
+  static Duration get uploadTimeout => _uploadTimeout;
 
-  // ✅ ດຶງ headers ພ້ອມ token
-  Future<Map<String, String>> _headers() async {
+  // ✅ Timeout constants
+  static const _connectTimeout = Duration(seconds: 20); // POST, PUT, DELETE
+  static const _receiveTimeout = Duration(seconds: 20); // GET
+  static const _uploadTimeout = Duration(seconds: 60); // File upload
+
+  Future<Map<String, String>> _headers({bool auth = true}) async {
     final token = await StorageService.instance.getToken();
     return {
       'Content-Type': 'application/json',
-      'Authorization': token != null ? 'Bearer $token' : '',
+      if (auth && token != null) 'Authorization': 'Bearer $token',
       'ngrok-skip-browser-warning': 'true',
     };
   }
 
-  // ✅ GET request
+  // api_client.dart — ເພີ່ມ method ນີ້ເຂົ້າໄປໃນ class ApiClient
+  Future<String?> getAuthToken() async {
+    return await StorageService.instance.getToken();
+  }
+
+  // ─── GET ──────────────────────────────────────────────────────────
   Future<ApiResponse> get(String path) async {
     try {
-      final response = await http.get(
-        Uri.parse('${AppConstants.apiBaseUrl}$path'),
-        headers: await _headers(),
-      );
-
-      // ✅ Handle 401
-      if (response.statusCode == 401) {
-        await StorageService.instance.clearAll();
-        return ApiResponse(
-          success: false,
-          message: 'Session ໝົດອາຍຸ ກະລຸນາ login ໃໝ່',
-          statusCode: 401,
-        );
-      }
+      final response = await http
+          .get(
+            Uri.parse('${AppConstants.apiBaseUrl}$path'),
+            headers: await _headers(),
+          )
+          .timeout(_receiveTimeout); // ✅ timeout
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return ApiResponse(
+        success: false,
+        message: 'ການເຊື່ອມຕໍ່ໃຊ້ເວລາດົນເກີນ ກະລຸນາລອງໃໝ່',
+      );
+    } on SocketException {
+      return ApiResponse(
+        success: false,
+        message: 'ບໍ່ມີການເຊື່ອມຕໍ່ອິນເຕີເນັດ',
+      );
     } catch (e) {
       return ApiResponse(success: false, message: e.toString());
     }
   }
 
-  // ✅ POST request
+  // ─── POST ─────────────────────────────────────────────────────────
   Future<ApiResponse> post(
     String path,
     Map<String, dynamic> body, {
     bool auth = true,
   }) async {
     try {
-      final headers = await _headers();
-      if (!auth) {
-        headers.remove('Authorization');
-      }
-
-      final response = await http.post(
-        Uri.parse('${AppConstants.apiBaseUrl}$path'),
-        headers: headers,
-        body: jsonEncode(body),
-      );
-
-      if (response.statusCode == 401 && auth) {
-        await StorageService.instance.clearAll();
-        return ApiResponse(
-          success: false,
-          message: 'Session ໝົດອາຍຸ ກະລຸນາ login ໃໝ່',
-          statusCode: 401,
-        );
-      }
+      final response = await http
+          .post(
+            Uri.parse('${AppConstants.apiBaseUrl}$path'),
+            headers: await _headers(auth: auth),
+            body: jsonEncode(body),
+          )
+          .timeout(_connectTimeout); // ✅ timeout
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return ApiResponse(
+        success: false,
+        message: 'ການເຊື່ອມຕໍ່ໃຊ້ເວລາດົນເກີນ ກະລຸນາລອງໃໝ່',
+      );
+    } on SocketException {
+      return ApiResponse(
+        success: false,
+        message: 'ບໍ່ມີການເຊື່ອມຕໍ່ອິນເຕີເນັດ',
+      );
     } catch (e) {
       return ApiResponse(success: false, message: e.toString());
     }
   }
 
-  // ✅ Handle response (private method)
+  // ─── PUT ──────────────────────────────────────────────────────────
+  Future<ApiResponse> put(
+    String path,
+    Map<String, dynamic> body, {
+    bool auth = true,
+  }) async {
+    try {
+      final response = await http
+          .put(
+            Uri.parse('${AppConstants.apiBaseUrl}$path'),
+            headers: await _headers(auth: auth),
+            body: jsonEncode(body),
+          )
+          .timeout(_connectTimeout); // ✅ timeout
+
+      return _handleResponse(response);
+    } on TimeoutException {
+      return ApiResponse(
+        success: false,
+        message: 'ການເຊື່ອມຕໍ່ໃຊ້ເວລາດົນເກີນ ກະລຸນາລອງໃໝ່',
+      );
+    } on SocketException {
+      return ApiResponse(
+        success: false,
+        message: 'ບໍ່ມີການເຊື່ອມຕໍ່ອິນເຕີເນັດ',
+      );
+    } catch (e) {
+      return ApiResponse(success: false, message: e.toString());
+    }
+  }
+
+  // ─── DELETE ───────────────────────────────────────────────────────
+  Future<ApiResponse> delete(String path) async {
+    try {
+      final response = await http
+          .delete(
+            Uri.parse('${AppConstants.apiBaseUrl}$path'),
+            headers: await _headers(),
+          )
+          .timeout(_connectTimeout); // ✅ timeout
+
+      return _handleResponse(response);
+    } on TimeoutException {
+      return ApiResponse(
+        success: false,
+        message: 'ການເຊື່ອມຕໍ່ໃຊ້ເວລາດົນເກີນ ກະລຸນາລອງໃໝ່',
+      );
+    } on SocketException {
+      return ApiResponse(
+        success: false,
+        message: 'ບໍ່ມີການເຊື່ອມຕໍ່ອິນເຕີເນັດ',
+      );
+    } catch (e) {
+      return ApiResponse(success: false, message: e.toString());
+    }
+  }
+
+  // ─── Handle Response ──────────────────────────────────────────────
   ApiResponse _handleResponse(http.Response response) {
+    // ✅ 401 → clear session
+    if (response.statusCode == 401) {
+      StorageService.instance.clearAll();
+      return ApiResponse(
+        success: false,
+        message: 'Session ໝົດອາຍຸ ກະລຸນາ login ໃໝ່',
+        statusCode: 401,
+      );
+    }
+
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return ApiResponse(
