@@ -3,11 +3,11 @@ require('dotenv').config()
  
 // Import Core Packages
 const express  = require('express')
-
 const cors     = require('cors')
-const helmet   = require('helmet')       // ເພີ່ມ HTTP security headers
+const helmet   = require('helmet')
 const rateLimit = require('express-rate-limit')
 const passport = require('passport')
+const path     = require('path') // ✅ เพิ่มสำหรับ static files
 
 // Import Database Connection
 const connectDB = require('./src/config/db')
@@ -20,7 +20,6 @@ const PORT = process.env.PORT || 3000
 // Connect Database
 connectDB()
 
-// ✅ ເພີ່ມ 2 ບັນທັດນີ້
 const { verifyEmailConnection } = require('./src/services/emailService')
 verifyEmailConnection()
 
@@ -34,8 +33,8 @@ app.use(cors({
         : [
             'http://localhost:3000', 
             'http://localhost:8081',
-            'http://10.0.2.2:3000', // ສໍາລັບ Android Emulator
-            'http://10.0.2.2',    // ເພີ່ມໄວ້ເພື່ອຄວາມແນ່ນອນ
+            'http://10.0.2.2:3000',
+            'http://10.0.2.2',
             'http://localhost:5173',       
           ],
     credentials: true,
@@ -46,24 +45,21 @@ app.use(cors({
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(passport.initialize())
- 
-// ─── Rate Limiters
 
+// ✅ Serve รูปภาพที่อัปโหลด (avatar, etc.)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
+
+// ─── Rate Limiters
 app.set('trust proxy', 1);
 
-// General: 100 req / 15 ນາທີ
 const limiter = rateLimit({
-    // windowMs: 15 * 60 * 1000,
     windowMs: 60 * 60 * 1000,
-
-    // max: 100,
-    max: process.env.NODE_ENV === 'development' ? 100 : 5, // ✅
+    max: process.env.NODE_ENV === 'development' ? 100 : 5,
     message: { success: false, message: 'ມີການຮ້ອງຂໍຫຼາຍເກີນໄປ, ກະລຸນາລອງໃໝ່ພາຍຫຼັງ 15 ນາທີ' },
     standardHeaders: true,
     legacyHeaders: false,
 })
  
-// Auth: 10 req / 15 ນາທີ (ປ້ອງກັນ brute-force)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -72,7 +68,6 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 })
  
-// ✅ Payment: 30 req / 15 ນາທີ (ປ້ອງກັນຈ່າຍຊ້ຳ)
 const paymentLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
@@ -81,11 +76,19 @@ const paymentLimiter = rateLimit({
     legacyHeaders: false,
 })
 
-// ✅ KYC: 5 req / ຊົ່ວໂມງ (ຍື່ນໄດ້ຈຳກັດ)
 const kycLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: 5,
     message: { success: false, message: 'ຍື່ນ KYC ຫຼາຍເກີນໄປ, ກະລຸນາລອງໃໝ່ພາຍຫຼັງ 1 ຊົ່ວໂມງ' },
+    standardHeaders: true,
+    legacyHeaders: false,
+})
+
+// ✅ Profile: 20 req / 15 ນາທີ
+const profileLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { success: false, message: 'ຮ້ອງຂໍຫຼາຍເກີນໄປ, ກະລຸນາລອງໃໝ່ພາຍຫຼັງ 15 ນາທີ' },
     standardHeaders: true,
     legacyHeaders: false,
 })
@@ -96,27 +99,24 @@ app.use('/api/', limiter)
 app.use('/api/auth/login',           authLimiter)
 app.use('/api/auth/register',        authLimiter)
 app.use('/api/auth/forgot-password', authLimiter)
-app.use('/api/payment/pay',          paymentLimiter)   // ໃໝ່
-app.use('/api/kyc/submit',           kycLimiter)        // ໃໝ່
+app.use('/api/payment/pay',          paymentLimiter)
+app.use('/api/kyc/submit',           kycLimiter)
+app.use('/api/profile',              profileLimiter) // ✅ เพิ่ม
  
 // ─── Routes 
 app.use('/api/auth',         require('./src/routes/authRoutes'))
-app.use('/api/wallet',       require('./src/routes/walletRoutes'))        // ເປີດແລ້ວ
-app.use('/api/payment',      require('./src/routes/paymentRoutes'))       // ໃໝ່
-app.use('/api/transactions', require('./src/routes/transactionRoutes'))   // ໃໝ່
-app.use('/api/kyc',          require('./src/routes/kycRoutes'))           // ໃໝ່
-app.use('/api/withdrawal', withdrawalRoutes);
+app.use('/api/wallet',       require('./src/routes/walletRoutes'))
+app.use('/api/payment',      require('./src/routes/paymentRoutes'))
+app.use('/api/transactions', require('./src/routes/transactionRoutes'))
+app.use('/api/kyc',          require('./src/routes/kycRoutes'))
+app.use('/api/withdrawal',   withdrawalRoutes)
+app.use('/api/profile',      require('./src/routes/profileRoutes')) // ✅ เพิ่ม
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// ─── Deep Link Redirects ──────────────────────────────────────────────────────
-app.get('/open/home', (req, res) => {
-    res.redirect('sabaidee://home')
-})
-app.get('/open/kyc', (req, res) => {
-    res.redirect('sabaidee://kyc')
-})
-
+// ─── Deep Link Redirects
+app.get('/open/home', (req, res) => res.redirect('sabaidee://home'))
+app.get('/open/kyc',  (req, res) => res.redirect('sabaidee://kyc'))
 
 // ─── Root Route 
 app.get('/', (req, res) => {
@@ -133,15 +133,12 @@ app.use((req, res, next) => {
 // ─── Global Error Handler 
 app.use((err, req, res, next) => {
     if (res.headersSent) return next(err)
- 
     const statusCode = err.status || err.statusCode || 500
- 
     if (process.env.NODE_ENV === 'development') {
         console.error('Error:', err)
     } else {
         console.error('Error:', err.message)
     }
- 
     res.status(statusCode).json({
         success: false,
         message: err.message || 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ',
@@ -149,7 +146,7 @@ app.use((err, req, res, next) => {
     })
 })
 
-// ─── Graceful Shutdown ────────────────────────────────────────────────────────
+// ─── Graceful Shutdown
 const gracefulShutdown = (signal) => {
     console.log(`\n${signal} received. Shutting down gracefully...`)
     server.close(() => {
@@ -162,19 +159,16 @@ const gracefulShutdown = (signal) => {
     }, 10000)
 }
  
-// ─── Process Event Handlers ───────────────────────────────────────────────────
-process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err)
-    process.exit(1)
+process.on('uncaughtException',  (err)            => { 
+    console.error('Uncaught Exception:', err); process.exit(1) 
 })
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    process.exit(1)
+process.on('unhandledRejection', (reason, promise) => { 
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason); process.exit(1) 
 })
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'))
  
-// ─── Start Server ─────────────────────────────────────────────────────────────
+// ─── Start Server
 const server = app.listen(PORT, () => {
     console.log(`🚀 Server Running: Port ${PORT}`)
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`)

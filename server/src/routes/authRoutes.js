@@ -22,9 +22,9 @@ router.get('/me',         protect, getMe);
 router.post('/logout',    protect, logout);
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
-router.put('/profile',             protect, updateProfile);
-router.put('/profile/image',       protect, upload.single('image'), updateProfileImage); // ✅
-router.put('/password',            protect, changePassword);
+// router.put('/profile',             protect, updateProfile);
+// router.put('/profile/image',       protect, upload.single('image'), updateProfileImage); // ✅
+// router.put('/password',            protect, changePassword);
 
 // ─── Password Reset ───────────────────────────────────────────────────────────
 router.post('/forgot-password', forgotPassword);
