@@ -9,6 +9,7 @@ const {
     pay,
     decodeInvoice,
     payLaoQR,
+    payLNURL,
     getLaoQRLimitStatus,
 } = require('../controllers/paymentController');
 
@@ -20,5 +21,6 @@ router.post('/pay', validatePayInvoice, pay);
 router.post('/decode', validateDecodeInvoice, decodeInvoice);
 router.post('/laoqr/pay', validateLaoQRPay, payLaoQR);
 router.get('/laoqr/limit-status', getLaoQRLimitStatus);
+router.post('/pay-lnurl', payLNURL);
 
 module.exports = router;

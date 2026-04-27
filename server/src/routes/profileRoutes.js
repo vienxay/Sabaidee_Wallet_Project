@@ -46,4 +46,5 @@ router.put   ('/me',     protect, updateMyProfile);
 router.post  ('/avatar', protect, upload.single('avatar'), handleMulterError, uploadAvatar);
 router.delete('/avatar', protect, deleteAvatar);
 
+
 module.exports = router;

@@ -86,6 +86,7 @@ exports.checkPaymentStatus = async (req, res) => {
                 if (transaction.type === 'topup') {
                     const balance = await lnbits.getBalance(wallet.invoiceKey);
                     wallet.balanceSats = balance.balanceSats;
+                    wallet.balanceLAK = await exchangeRate.convertSatsToLAK(balance.balanceSats);
                     await wallet.save();
                 }
             }
@@ -95,7 +96,7 @@ exports.checkPaymentStatus = async (req, res) => {
             success:     true,
             paid:        status.paid,
             paymentHash,
-            transaction: status.paid ? await Transaction.findOne({ paymentHash }) : null,
+            transaction: status.paid ? await Transaction.findOne({ paymentHash, user: req.user._id }) : null,
         });
     } catch (error) {
         console.error('Check Payment Status Error:', error);

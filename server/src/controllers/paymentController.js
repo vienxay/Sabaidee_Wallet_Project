@@ -3,6 +3,7 @@ const Transaction = require('../models/Transaction');
 const Kyc = require('../models/Kyc');
 const lnbits = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
+const axios = require('axios');
 
 const LIMIT = {
     unverified: { perTx: 500_000, daily: 1_000_000 },
@@ -16,6 +17,61 @@ const LAO_QR_LIMIT = {
 
 const isLightningAddress = (address) =>
     /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(address);
+
+const isLNURL = (str) =>
+    str.toUpperCase().startsWith('LNURL');
+
+// ✅ decode + fetch ຢູ່ນີ້ເລີຍ ບໍ່ຕ້ອງ import ຈາກ withdrawalController
+const decodeLNURL = (lnurl) => {
+    const bech32 = require('bech32');
+    const decoded = bech32.bech32.decode(lnurl, 2000);
+    const bytes   = bech32.bech32.fromWords(decoded.words);
+    return Buffer.from(bytes).toString('utf8');
+};
+
+const fetchInvoiceFromLNURL = async (lnurl, amountSats) => {
+    const url = decodeLNURL(lnurl);
+    const { data: meta } = await axios.get(url, { timeout: 10_000 });
+    if (meta.tag !== 'payRequest') throw new Error('ບໍ່ຮອງຮັບ LNURL ນີ້');
+
+    const amountMsats = amountSats * 1000;
+    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
+        const minS = Math.ceil(meta.minSendable / 1000);
+        const maxS = Math.floor(meta.maxSendable / 1000);
+        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
+    }
+
+    const { data: inv } = await axios.get(
+        `${meta.callback}?amount=${amountMsats}`,
+        { timeout: 10_000 }
+    );
+    if (!inv.pr) throw new Error('ບໍ່ສາມາດຂໍ invoice ຈາກ LNURL ໄດ້');
+    return inv.pr;
+};
+
+// ✅ ເພີ່ມ helper ນີ້
+const fetchInvoiceFromAddress = async (address, amountSats) => {
+    const [user, domain] = address.split('@');
+    const { data: meta } = await axios.get(
+        `https://${domain}/.well-known/lnurlp/${user}`,
+        { timeout: 10_000 }
+    );
+    if (meta.tag !== 'payRequest') throw new Error('ບໍ່ຮອງຮັບ Lightning Address ນີ້');
+
+    const amountMsats = amountSats * 1000;
+    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
+        const minS = Math.ceil(meta.minSendable / 1000);
+        const maxS = Math.floor(meta.maxSendable / 1000);
+        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
+    }
+
+    const { data: inv } = await axios.get(
+        `${meta.callback}?amount=${amountMsats}`,
+        { timeout: 10_000 }
+    );
+    if (!inv.pr) throw new Error('ຂໍ invoice ຈາກ Lightning Address ບໍ່ສຳເລັດ');
+    return inv.pr;
+};
 
 const getStartOfDay = () => {
     const startOfDay = new Date();
@@ -35,7 +91,6 @@ const getDailySpentLAK = async (userId) => {
         },
         { $group: { _id: null, total: { $sum: '$amountLAK' } } },
     ]);
-
     return result[0]?.total || 0;
 };
 
@@ -51,13 +106,15 @@ const getDailyLaoQRSpentLAK = async (userId) => {
         },
         { $group: { _id: null, total: { $sum: '$amountLAK' } } },
     ]);
-
     return result[0]?.total || 0;
 };
 
 const formatLAK = (amount) =>
     amount.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,');
 
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/payment/decode
+// ════════════════════════════════════════════════════════════════════════════
 exports.decodeInvoice = async (req, res) => {
     try {
         let { paymentRequest } = req.body;
@@ -66,48 +123,71 @@ exports.decodeInvoice = async (req, res) => {
         }
 
         paymentRequest = paymentRequest.trim();
+        const rate = await exchangeRate.getExchangeRate();
 
-        if (isLightningAddress(paymentRequest)) {
-            const rate = await exchangeRate.getExchangeRate();
+        // ✅ 1. LNURL
+        if (isLNURL(paymentRequest)) {
+            const url = decodeLNURL(paymentRequest);
+            const { data: meta } = await axios.get(url, { timeout: 10_000 });
+
+            const minSats = Math.ceil(meta.minSendable / 1000);
+            const maxSats = Math.floor(meta.maxSendable / 1000);
+            const [minLAK, maxLAK] = await Promise.all([
+                exchangeRate.convertSatsToLAK(minSats),
+                exchangeRate.convertSatsToLAK(maxSats),
+            ]);
+
             return res.status(200).json({
                 success: true,
+                isLNURL: true,
+                isAddress: false,
+                minSats,
+                maxSats,
+                minLAK,
+                maxLAK,
+                description: meta.defaultDescription || 'LNURL Payment',
+                rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
+            });
+        }
+
+        // ✅ 2. Lightning Address
+        if (isLightningAddress(paymentRequest)) {
+            return res.status(200).json({
+                success: true,
+                isLNURL: false,
                 isAddress: true,
                 payee: paymentRequest,
                 amountSats: 0,
                 amountLAK: 0,
                 description: `Pay to ${paymentRequest}`,
-                rate: {
-                    btcToLAK: rate.btcToLAK,
-                    btcToUSD: rate.btcToUSD,
-                },
+                rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
             });
         }
 
-        const [decoded, rate] = await Promise.all([
-            lnbits.decodeInvoice(paymentRequest),
-            exchangeRate.getExchangeRate(),
-        ]);
-
+        // ✅ 3. Lightning Invoice
+        const decoded = await lnbits.decodeInvoice(paymentRequest);
         const amountLAK = await exchangeRate.convertSatsToLAK(decoded.amountSats);
 
         return res.status(200).json({
             success: true,
+            isLNURL: false,
             isAddress: false,
             amountSats: decoded.amountSats,
             amountLAK,
             description: decoded.description,
             expiry: decoded.expiry,
-            rate: {
-                btcToLAK: rate.btcToLAK,
-                btcToUSD: rate.btcToUSD,
-            },
+            rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
         });
+
     } catch (error) {
         console.error('Decode Invoice Error:', error);
         return res.status(500).json({ success: false, message: 'Invoice ບໍ່ຖືກຕ້ອງ' });
     }
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/payment/pay
+// ════════════════════════════════════════════════════════════════════════════
 exports.pay = async (req, res) => {
     try {
         const { paymentRequest, memo, amount } = req.body;
@@ -125,13 +205,43 @@ exports.pay = async (req, res) => {
         const isKYCVerified = kyc?.status === 'verified';
         const limit = isKYCVerified ? LIMIT.verified : LIMIT.unverified;
 
-        const [decoded, rate, balanceResult] = await Promise.all([
-            lnbits.decodeInvoice(paymentRequest.trim()),
+        const input      = paymentRequest.trim();
+        const isAddr     = isLightningAddress(input);
+        const isLNURLInput = isLNURL(input);
+
+        const [rate, balanceResult] = await Promise.all([
             exchangeRate.getExchangeRate(),
             lnbits.getBalance(wallet.invoiceKey),
         ]);
 
-        const amountSats = decoded.amountSats > 0 ? decoded.amountSats : (parseInt(amount, 10) || 0);
+        let finalInvoice = input;
+        let amountSats   = parseInt(amount, 10) || 0;
+        let description  = memo || 'Payment';
+
+        if (isAddr) {
+            if (amountSats <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ກະລຸນາລະບຸຈຳນວນ sats ສຳລັບ Lightning Address',
+                });
+            }
+            finalInvoice = await fetchInvoiceFromAddress(input, amountSats);
+
+        } else if (isLNURLInput) {
+            if (amountSats <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ກະລຸນາລະບຸຈຳນວນ sats ສຳລັບ LNURL',
+                });
+            }
+            finalInvoice = await fetchInvoiceFromLNURL(input, amountSats);
+
+        } else {
+            const decoded = await lnbits.decodeInvoice(finalInvoice);
+            amountSats  = decoded.amountSats > 0 ? decoded.amountSats : amountSats;
+            description = memo || decoded.description || 'Payment';
+        }
+
         if (amountSats <= 0) {
             return res.status(400).json({ success: false, message: 'ກະລຸນາລະບຸຈຳນວນ sats' });
         }
@@ -157,35 +267,50 @@ exports.pay = async (req, res) => {
             });
         }
 
-        if (balanceResult.balanceSats < amountSats) {
-            return res.status(400).json({ success: false, message: 'ຍອດເງິນ sats ບໍ່ພໍ' });
+        // ✅ ກວດວ່າ LNBits balance ຕ້ອງ > 0 ກ່ອນ
+        if (balanceResult.balanceSats <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ຍອດເງິນ sats ໝົດແລ້ວ — ກະລຸນາ TopUp ກ່ອນ',
+            });
+        }
+
+        const MIN_RESERVE_SATS = 10;
+        if (balanceResult.balanceSats < amountSats + MIN_RESERVE_SATS) {
+            return res.status(400).json({
+                success: false,
+                message: `ຍອດເງິນບໍ່ພໍ (ມີ ${balanceResult.balanceSats} sats)`,
+            });
         }
 
         const payResult = await lnbits.payInvoice({
             adminKey: wallet.adminKey,
-            paymentRequest: paymentRequest.trim(),
+            paymentRequest: finalInvoice,
         });
 
-        wallet.balanceSats = balanceResult.balanceSats - amountSats - (payResult.feeSats || 0);
+        // ✅ ແກ້ໄຂ: ດຶງ balance ຈິງຈາກ LNBits ຫຼັງຈ່າຍ
+        const newBalance   = await lnbits.getBalance(wallet.invoiceKey);
+        wallet.balanceSats = Math.max(0, newBalance.balanceSats); // ຕ່ຳສຸດ = 0
+        wallet.balanceLAK  = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
         const transaction = await Transaction.create({
-            user: req.user._id,
-            wallet: wallet._id,
-            type: 'pay',
-            status: 'success',
+            user:           req.user._id,
+            wallet:         wallet._id,
+            type:           'pay',
+            status:         'success',
             amountSats,
             amountLAK,
-            feeSats: payResult.feeSats || 0,
-            paymentHash: payResult.paymentHash,
-            paymentRequest: paymentRequest.trim(),
-            memo: memo || decoded.description || 'Payment',
-            kycRequired: !isKYCVerified,
-            kycVerified: isKYCVerified,
+            feeSats:        payResult.feeSats || 0,
+            paymentHash:    payResult.paymentHash,
+            paymentRequest: finalInvoice,
+            memo:           description,
+            kycRequired:    !isKYCVerified,
+            kycVerified:    isKYCVerified,
             exchangeRate: {
-                btcToLAK: rate.btcToLAK,
-                btcToUSD: rate.btcToUSD,
-                usdToLAK: rate.usdToLAK,
+                btcToLAK:  rate.btcToLAK,
+                btcToUSD:  rate.btcToUSD,
+                usdToLAK:  rate.usdToLAK,
                 fetchedAt: rate.fetchedAt,
             },
         });
@@ -195,16 +320,13 @@ exports.pay = async (req, res) => {
             message: 'ຈ່າຍເງິນສຳເລັດ',
             payment: {
                 transactionId: transaction._id,
-                paymentHash: payResult.paymentHash,
+                paymentHash:   payResult.paymentHash,
                 amountSats,
                 amountLAK,
-                feeSats: payResult.feeSats || 0,
-                balanceSats: wallet.balanceSats,
-                rate: {
-                    btcToLAK: rate.btcToLAK,
-                    btcToUSD: rate.btcToUSD,
-                    usedAt: rate.fetchedAt,
-                },
+                feeSats:       payResult.feeSats || 0,
+                balanceSats:   wallet.balanceSats, // ✅ ຄ່າຈິງຈາກ LNBits
+                balanceLAK:    wallet.balanceLAK,  // ✅ ເພີ່ມ
+                rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
             },
         });
     } catch (error) {
@@ -213,6 +335,34 @@ exports.pay = async (req, res) => {
     }
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// ✅ POST /api/payment/pay-lnurl  (ໃໝ່)
+// ════════════════════════════════════════════════════════════════════════════
+exports.payLNURL = async (req, res) => {
+    try {
+        const { lnurl, amountSats, memo } = req.body;
+
+        if (!lnurl || !amountSats || amountSats <= 0) {
+            return res.status(400).json({ success: false, message: 'ກະລຸນາໃສ່ LNURL ແລະ ຈຳນວນ sats' });
+        }
+
+        // ✅ ໃຊ້ fetchInvoiceFromLNURL ແທນ lnurlPay
+        const invoice = await fetchInvoiceFromLNURL(lnurl, amountSats);
+
+        req.body.paymentRequest = invoice;
+        req.body.amount = amountSats;
+        req.body.memo = memo || 'LNURL Payment';
+        return exports.pay(req, res);
+
+    } catch (error) {
+        console.error('LNURL Pay Error:', error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// POST /api/payment/pay-lao-qr
+// ════════════════════════════════════════════════════════════════════════════
 exports.payLaoQR = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -239,7 +389,6 @@ exports.payLaoQR = async (req, res) => {
                         'ກະລຸນາຢືນຢັນຕົວຕົນ (KYC) ເພື່ອຍົກລະດັບວົງເງິນ',
                 });
             }
-
             return res.status(400).json({
                 success: false,
                 limitExceeded: true,
@@ -252,17 +401,27 @@ exports.payLaoQR = async (req, res) => {
             });
         }
 
+        const [amountSats, rate] = await Promise.all([
+            exchangeRate.convertLAKToSats(amountLAK),
+            exchangeRate.getExchangeRate(),
+        ]);
+
         const tx = await Transaction.create({
             user: userId,
             type: 'laoQR',
             status: 'success',
-            amountSats: 0,
+            amountSats,
             amountLAK,
             merchantName: merchantName || 'ຮ້ານຄ້າ',
             bank: bank || '',
             qrRaw: qrRaw || '',
             memo: description || 'LAO QR Payment',
             kycVerified: isKYCVerified,
+            exchangeRate: {
+                btcToLAK: rate.btcToLAK,
+                btcToUSD: rate.btcToUSD,
+                fetchedAt: rate.fetchedAt,
+            },
         });
 
         return res.status(200).json({
@@ -279,6 +438,9 @@ exports.payLaoQR = async (req, res) => {
     }
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// GET /api/payment/lao-qr/limit
+// ════════════════════════════════════════════════════════════════════════════
 exports.getLaoQRLimitStatus = async (req, res) => {
     try {
         const userId = req.user._id;

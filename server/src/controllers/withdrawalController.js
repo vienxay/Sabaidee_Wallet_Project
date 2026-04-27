@@ -14,6 +14,44 @@ const WITHDRAWAL_LIMIT = {
     verified:   { perTx: 5_000_000, daily: 20_000_000 }, // LAK
 };
 
+// ✅ ກວດ LNURL
+const isLNURL = (str) =>
+    str.toUpperCase().startsWith('LNURL');
+
+// ✅ decode LNURL bech32 → URL
+const decodeLNURL = (lnurl) => {
+    const bech32 = require('bech32');
+    const decoded = bech32.bech32.decode(lnurl, 2000);
+    const bytes   = bech32.bech32.fromWords(decoded.words);
+    return Buffer.from(bytes).toString('utf8');
+};
+
+// ✅ ດຶງ invoice ຈາກ LNURL
+const fetchInvoiceFromLNURL = async (lnurl, amountSats) => {
+    // 1. decode LNURL → URL
+    const url = decodeLNURL(lnurl);
+
+    // 2. ດຶງ LNURL-pay metadata
+    const { data: meta } = await axios.get(url, { timeout: 10_000 });
+    if (meta.tag !== 'payRequest') {
+        throw new Error('ບໍ່ຮອງຮັບ LNURL ນີ້');
+    }
+
+    const amountMsats = amountSats * 1000;
+    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
+        const minS = Math.ceil(meta.minSendable / 1000);
+        const maxS = Math.floor(meta.maxSendable / 1000);
+        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
+    }
+
+    // 3. ຂໍ invoice
+    const callbackUrl = `${meta.callback}?amount=${amountMsats}`;
+    const { data: inv } = await axios.get(callbackUrl, { timeout: 10_000 });
+    if (!inv.pr) throw new Error('ບໍ່ສາມາດຂໍ invoice ຈາກ LNURL ໄດ້');
+
+    return inv.pr;
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════════════════════════════════════════
@@ -157,7 +195,11 @@ exports.previewWithdrawal = async (req, res) => {
         }
 
         // ── ດຶງ display name ─────────────────────────────────────────────────
-        const destinationType = isLightningAddress(destination) ? 'address' : 'invoice';
+        const destinationType = isLightningAddress(destination)
+            ? 'address'
+            : isLNURL(destination)
+                ? 'lnurl'
+                : 'invoice';
 
         return res.json({
             success:         true,
@@ -235,10 +277,16 @@ exports.sendWithdrawal = async (req, res) => {
 
         // ── ໄດ້ BOLT11 invoice ───────────────────────────────────────────────
         let paymentRequest;
-        const destType = isLightningAddress(destination) ? 'address' : 'invoice';
+        const destType = isLightningAddress(destination)
+            ? 'address'
+            : isLNURL(destination)
+                ? 'lnurl'
+                : 'invoice';
 
         if (destType === 'address') {
             paymentRequest = await fetchInvoiceFromAddress(destination.trim(), amountSats);
+        } else if (destType === 'lnurl') {
+            paymentRequest = await fetchInvoiceFromLNURL(destination.trim(), amountSats); // ✅ ເພີ່ມ
         } else {
             paymentRequest = destination.trim();
         }
