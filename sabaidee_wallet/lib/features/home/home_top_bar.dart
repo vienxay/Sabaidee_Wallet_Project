@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 import '../../core/core.dart';
 import '../../models/app_models.dart';
+import '../../services/profile_service.dart';
 
 class HomeTopBar extends StatefulWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;
@@ -24,8 +24,24 @@ class HomeTopBar extends StatefulWidget {
 class _HomeTopBarState extends State<HomeTopBar> {
   final _picker = ImagePicker();
   bool _uploading = false;
+  String? _profileImageUrl; // ✅ เก็บ URL จาก ProfileService
 
-  // ─── ເລືອກຮູບ ─────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileImage(); // ✅ โหลดรูปจาก Profile collection
+  }
+
+  // ✅ ดึง profileImage จาก ProfileService (ไม่ใช่ UserModel)
+  Future<void> _loadProfileImage() async {
+    final profile = await ProfileService.getProfile();
+    if (profile != null && mounted) {
+      setState(() {
+        _profileImageUrl = profile.profileImage;
+      });
+    }
+  }
+
   Future<void> _pickImage() async {
     showModalBottomSheet(
       context: context,
@@ -76,50 +92,38 @@ class _HomeTopBarState extends State<HomeTopBar> {
     );
   }
 
-  // ─── Upload ───────────────────────────────────────────────────────────────
   Future<void> _upload(ImageSource source) async {
     final picked = await _picker.pickImage(
       source: source,
-      imageQuality: 80,
-      maxWidth: 800,
+      imageQuality: 50, // ✅ ลดจาก 80 → 50
+      maxWidth: 400, // ✅ ลดจาก 800 → 400
+      maxHeight: 400,
     );
     if (picked == null) return;
 
     setState(() => _uploading = true);
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(AppConstants.tokenKey) ?? '';
+      // ✅ ใช้ ProfileService.uploadAvatar() — endpoint/method/field ถูกต้องทั้งหมด
+      final newUrl = await ProfileService.uploadAvatar(File(picked.path));
 
-      final req =
-          http.MultipartRequest(
-              'PUT',
-              Uri.parse(
-                '${AppConstants.apiBaseUrl}${AppConstants.authProfileImage}',
-              ),
-            )
-            ..headers['Authorization'] = 'Bearer $token'
-            ..files.add(
-              await http.MultipartFile.fromPath('image', picked.path),
-            );
-
-      final res = await req.send();
-      if (res.statusCode == 200) {
-        widget.onImageUpdated?.call(); // ✅ refresh home
+      if (newUrl != null && mounted) {
+        setState(
+          () => _profileImageUrl = '${AppConstants.apiBaseUrl}$newUrl',
+        ); // ✅ full URL
+        widget.onImageUpdated?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ອັບເດດຮູບໂປຣໄຟລ໌ສຳເລັດ ✅'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ອັບເດດຮູບໂປຣໄຟລ໌ສຳເລັດ ✅'),
-              backgroundColor: AppColors.primary,
-            ),
+            const SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່')),
           );
         }
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ເກີດຂໍ້ຜິດພາດ ກະລຸນາລອງໃໝ່')),
-        );
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -130,14 +134,12 @@ class _HomeTopBarState extends State<HomeTopBar> {
   Widget build(BuildContext context) {
     final name = widget.user?.name ?? '';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-    final imageUrl = widget.user?.profileImage;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── ແຖວ 1: Menu + Bell ─────────────────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -179,14 +181,12 @@ class _HomeTopBarState extends State<HomeTopBar> {
 
           const SizedBox(height: 16),
 
-          // ─── ແຖວ 2: Avatar (tap ເພື່ອປ່ຽນ) + Name ───────────────────────
           Row(
             children: [
               GestureDetector(
                 onTap: _uploading ? null : _pickImage,
                 child: Stack(
                   children: [
-                    // Avatar
                     Container(
                       width: 48,
                       height: 48,
@@ -196,9 +196,12 @@ class _HomeTopBarState extends State<HomeTopBar> {
                         border: Border.all(color: AppColors.primary, width: 2),
                       ),
                       child: ClipOval(
-                        child: imageUrl != null && imageUrl.isNotEmpty
+                        // ✅ ใช้ _profileImageUrl แทน widget.user?.profileImage
+                        child:
+                            _profileImageUrl != null &&
+                                _profileImageUrl!.isNotEmpty
                             ? Image.network(
-                                imageUrl,
+                                _profileImageUrl!,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Center(
                                   child: Text(
@@ -223,7 +226,6 @@ class _HomeTopBarState extends State<HomeTopBar> {
                               ),
                       ),
                     ),
-                    // Upload indicator
                     if (_uploading)
                       Positioned.fill(
                         child: Container(
@@ -243,7 +245,6 @@ class _HomeTopBarState extends State<HomeTopBar> {
                           ),
                         ),
                       ),
-                    // Camera icon badge
                     if (!_uploading)
                       Positioned(
                         bottom: 0,

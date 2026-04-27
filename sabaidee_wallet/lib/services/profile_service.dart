@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../core/app_constants.dart';
 import 'api_client.dart'; // ✅ ໃຊ້ ApiClient ແທນ http ໂດຍກົງ
+import 'package:http_parser/http_parser.dart';
 
 class ProfileModel {
   final String? name;
@@ -100,12 +101,19 @@ class ProfileService {
   // ✅ ແຕ່ເພີ່ມ timeout ດ້ວຍ .timeout()
   static Future<String?> uploadAvatar(File imageFile) async {
     try {
-      final token = await ApiClient.instance
-          .getAuthToken(); // ✅ ດຶງຈາກ ApiClient
+      final token = await ApiClient.instance.getAuthToken();
       if (token == null) {
         print('❌ [ProfileService] AVATAR → token null');
         return null;
       }
+
+      // ✅ ตรวจนามสกุลไฟล์ แล้วกำหนด MIME type ตรงๆ
+      final ext = imageFile.path.split('.').last.toLowerCase();
+      final mimeType = switch (ext) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        _ => 'image/jpeg', // default
+      };
 
       final request = http.MultipartRequest(
         'POST',
@@ -114,19 +122,19 @@ class ProfileService {
       request.headers['Authorization'] = 'Bearer $token';
       request.headers['ngrok-skip-browser-warning'] = 'true';
       request.files.add(
-        await http.MultipartFile.fromPath('avatar', imageFile.path),
+        await http.MultipartFile.fromPath(
+          'avatar',
+          imageFile.path,
+          contentType: MediaType.parse(mimeType), // ✅ บังคับ MIME type
+        ),
       );
 
-      // ✅ ເພີ່ມ timeout ສຳລັບ upload
-      // uploadAvatar() — ແກ້ timeout
-      final streamed = await request.send().timeout(
-        ApiClient.uploadTimeout,
-      ); // ✅ 60 ວິ
-
-      // ✅ ເພີ່ມ timeout ສຳລັບ fromStream ດ້ວຍ
+      // ✅ ใหม่ — เพิ่ม timeout เป็น 120 วินาที สำหรับ upload
+      const uploadTimeout = Duration(seconds: 120);
+      final streamed = await request.send().timeout(uploadTimeout);
       final response = await http.Response.fromStream(
         streamed,
-      ).timeout(ApiClient.uploadTimeout);
+      ).timeout(uploadTimeout);
 
       print(
         '📥 [ProfileService] AVATAR ${response.statusCode}: ${response.body}',

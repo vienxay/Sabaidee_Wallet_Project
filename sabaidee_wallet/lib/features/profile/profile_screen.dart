@@ -4,7 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../widgets/custom_button.dart';
 import '../../../services/profile_service.dart';
-import '../../../core/app_constants.dart';
+import '../../../services/auth_service.dart';
+import '../../../models/app_models.dart'; // ✅ UserModel
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -24,7 +25,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _emailController = TextEditingController();
   final _dobController = TextEditingController();
   final _phoneController = TextEditingController();
-  String? _selectedGender; // ✅ ໃຊ້ String? ແທນ Controller
+  String? _selectedGender;
 
   @override
   void initState() {
@@ -42,28 +43,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _loadProfile() async {
-    setState(() => _isLoading = true);
-    final profile = await ProfileService.getProfile();
-    if (profile != null && mounted) {
-      setState(() {
-        _nameController.text = profile.name ?? '';
-        _lastNameController.text = profile.lastName ?? '';
-        _emailController.text = profile.email ?? '';
-        _dobController.text = profile.dateOfBirth ?? '';
-        _phoneController.text = profile.phone ?? '';
-        // ✅ ກວດ gender ໃຫ້ match enum
-        const validGenders = ['male', 'female', 'other'];
-        _selectedGender = validGenders.contains(profile.gender)
-            ? profile.gender
-            : null;
-        _profileImageUrl = profile.profileImage;
-      });
+  // ✅ แปลง ISO date → yyyy-MM-dd
+  String _formatDate(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(isoDate);
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return isoDate;
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
-  // ── ເລືອກວັນເດືອນປີເກີດ ─────────────────────────────────────
+  Future<void> _loadProfile() async {
+    setState(() => _isLoading = true);
+
+    final results = await Future.wait([
+      ProfileService.getProfile(),
+      AuthService.instance.getMe(),
+    ]);
+
+    final profile = results[0] as ProfileModel?;
+    final user = results[1] as UserModel?;
+
+    if (mounted) {
+      setState(() {
+        _nameController.text = profile?.name ?? '';
+        _lastNameController.text = profile?.lastName ?? '';
+        _emailController.text = user?.email ?? ''; // ✅ จาก UserModel
+        _phoneController.text = profile?.phone ?? '';
+        _dobController.text = _formatDate(profile?.dateOfBirth); // ✅ format ถูก
+        _profileImageUrl = profile?.profileImage; // ✅ Cloudinary full URL
+
+        const validGenders = ['male', 'female', 'other'];
+        _selectedGender = validGenders.contains(profile?.gender)
+            ? profile?.gender
+            : null;
+
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _pickDate() async {
     DateTime? initial;
     if (_dobController.text.isNotEmpty) {
@@ -83,8 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
     if (picked != null) {
-      // ✅ ISO format "2000-01-01" → server parse ໄດ້
-      _dobController.text = picked.toIso8601String().split('T')[0];
+      _dobController.text =
+          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     }
   }
 
@@ -92,9 +112,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 800, // ✅ ຫຼຸດຂະໜາດ
-      maxHeight: 800,
-      imageQuality: 70, // ✅ ຫຼຸດ quality → file ນ້ອຍລົງ → upload ໄວຂຶ້ນ
+      maxWidth: 400,
+      maxHeight: 400,
+      imageQuality: 50,
     );
     if (pickedFile == null) return;
 
@@ -102,7 +122,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final newUrl = await ProfileService.uploadAvatar(File(pickedFile.path));
     if (newUrl != null && mounted) {
-      setState(() => _profileImageUrl = newUrl);
+      setState(
+        () => _profileImageUrl = newUrl,
+      ); // ✅ Cloudinary full URL ใช้ได้เลย
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('ອັບໂຫລດຮູບສຳເລັດ'),
@@ -115,7 +137,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveProfile() async {
     setState(() => _isSaving = true);
 
-    // ✅ ສົ່ງ null ຖ້າ field ຫວ່າງ — ບໍ່ສົ່ງ empty string
     String? nullIfEmpty(String text) =>
         text.trim().isEmpty ? null : text.trim();
 
@@ -129,7 +150,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (mounted) {
       setState(() => _isSaving = false);
-      // ✅ ສະແດງ SnackBar ກ່ອນ ແລ້ວຄ່ອຍປິດ modal
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(success ? 'ບັນທຶກຂໍ້ມູນສຳເລັດ' : 'ເກີດຂໍ້ຜິດພາດ'),
@@ -150,7 +170,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       builder: (context) => StatefulBuilder(
-        // ✅ ໃຊ້ StatefulBuilder ສຳລັບ dropdown
         builder: (context, setModalState) => SizedBox(
           height: MediaQuery.of(context).size.height * 0.9,
           child: Column(
@@ -203,11 +222,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Icons.phone,
                       ),
 
-                      // ✅ Gender Dropdown
                       Padding(
                         padding: const EdgeInsets.only(bottom: 15),
                         child: DropdownButtonFormField<String>(
-                          value: _selectedGender,
                           decoration: InputDecoration(
                             labelText: 'ເພດ',
                             prefixIcon: const Icon(
@@ -236,9 +253,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Text('ອື່ນໆ'),
                             ),
                           ],
-                          onChanged: (val) {
-                            setModalState(() => _selectedGender = val);
-                          },
+                          onChanged: (val) =>
+                              setModalState(() => _selectedGender = val),
                         ),
                       ),
 
@@ -268,7 +284,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.only(bottom: 15),
       child: TextField(
         controller: _dobController,
-        readOnly: true, // ✅ ບໍ່ໃຫ້ພິມຟຣີ
+        readOnly: true,
         onTap: _pickDate,
         decoration: InputDecoration(
           labelText: 'ວັນເດືອນປີເກີດ',
@@ -398,6 +414,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildPhotoPicker() {
+    // ✅ Cloudinary URL ใช้ได้ตรงๆ ไม่ต้องรวม apiBaseUrl
+    ImageProvider? imageProvider;
+    if (_imageFile != null) {
+      imageProvider = FileImage(_imageFile!);
+    } else if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      imageProvider = NetworkImage(
+        _profileImageUrl!,
+      ); // ✅ full URL จาก Cloudinary
+    }
+
     return GestureDetector(
       onTap: _pickImage,
       child: Stack(
@@ -412,16 +438,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: CircleAvatar(
               radius: 60,
               backgroundColor: Colors.grey[200],
-              // ✅ ໃຊ້ backgroundImage ສະເພາະເມື່ອມີຮູບ
-              backgroundImage: _imageFile != null
-                  ? FileImage(_imageFile!) as ImageProvider
-                  : (_profileImageUrl != null && _profileImageUrl!.isNotEmpty)
-                  ? NetworkImage('${AppConstants.apiBaseUrl}$_profileImageUrl')
-                  : null,
-              // ✅ ຖ້າບໍ່ມີຮູບ → ສະແດງ Icon ແທນ (ບໍ່ຕ້ອງໃຊ້ Asset)
-              child:
-                  (_imageFile == null &&
-                      (_profileImageUrl == null || _profileImageUrl!.isEmpty))
+              backgroundImage: imageProvider,
+              child: imageProvider == null
                   ? const Icon(Icons.person, size: 60, color: Colors.grey)
                   : null,
             ),
@@ -448,14 +466,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildInfoList() {
-    // ✅ Gender ສະແດງເປັນ label ພາສາລາວ
     String genderLabel = '-';
-    if (_selectedGender == 'male')
+    if (_selectedGender == 'male') {
       genderLabel = 'ຊາຍ';
-    else if (_selectedGender == 'female')
+    } else if (_selectedGender == 'female') {
       genderLabel = 'ຍິງ';
-    else if (_selectedGender == 'other')
+    } else if (_selectedGender == 'other') {
       genderLabel = 'ອື່ນໆ';
+    }
 
     return Column(
       children: [
