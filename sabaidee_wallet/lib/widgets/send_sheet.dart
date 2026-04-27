@@ -30,6 +30,10 @@ class _SendSheetState extends State<SendSheet> {
   DecodedInvoiceModel? _decoded;
   LaoQRInfo? _laoQRInfo;
 
+  // ✅ ເພີ່ມ: track LAK ທີ່ສະແດງ real-time
+  double _displayLAK = 0;
+  int _displaySats = 0;
+
   @override
   void initState() {
     super.initState();
@@ -39,13 +43,29 @@ class _SendSheetState extends State<SendSheet> {
         (_) => _processInput(widget.invoice!),
       );
     }
+    _amountSatsCtrl.addListener(_onSatsChanged); // ✅ listener
   }
 
+  // ✅ dispose() ດຽວ — ລຶບ listener + dispose controllers
   @override
   void dispose() {
+    _amountSatsCtrl.removeListener(_onSatsChanged); // ✅ ລຶບ listener ກ່ອນ
     _invoiceCtrl.dispose();
     _amountSatsCtrl.dispose();
     super.dispose();
+  }
+
+  // ✅ ເພີ່ມ: ຄຳນວນ LAK ຈາກ sats ທີ່ user ໃສ່
+  void _onSatsChanged() {
+    if (_decoded == null) return;
+    final sats = int.tryParse(_amountSatsCtrl.text.trim()) ?? 0;
+    final rate = _decoded!.rate;
+    if (rate == null || rate.btcToLAK == 0) return;
+
+    setState(() {
+      _displaySats = sats;
+      _displayLAK = (sats / 100_000_000) * rate.btcToLAK;
+    });
   }
 
   Future<void> _processInput(String raw) async {
@@ -64,13 +84,29 @@ class _SendSheetState extends State<SendSheet> {
         _laoQRInfo = LaoQRInfo.fromRaw(input);
         _loading = false;
       });
-    } else {
+    } else if (type == QRType.lnurl) {
       final res = await PaymentService.instance.decodeInvoice(input);
       if (!mounted) return;
       setState(() {
         _loading = false;
         if (res.success && res.data != null) {
           _decoded = res.data;
+          _displaySats = 0;
+          _displayLAK = 0;
+          _amountSatsCtrl.clear(); // ✅ clear ໃຫ້ user ໃສ່ເອງ
+        } else {
+          _error = res.message.isNotEmpty ? res.message : 'LNURL ບໍ່ຖືກຕ້ອງ';
+        }
+      });
+    } else if (type == QRType.lightning) {
+      final res = await PaymentService.instance.decodeInvoice(input);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (res.success && res.data != null) {
+          _decoded = res.data;
+          _displaySats = _decoded!.amountSats;
+          _displayLAK = _decoded!.amountLAK.toDouble();
           if (_decoded!.amountSats > 0) {
             _amountSatsCtrl.text = _decoded!.amountSats.toString();
           }
@@ -78,33 +114,73 @@ class _SendSheetState extends State<SendSheet> {
           _error = res.message.isNotEmpty ? res.message : 'Invoice ບໍ່ຖືກຕ້ອງ';
         }
       });
+    } else {
+      setState(() {
+        _loading = false;
+        _error = 'ບໍ່ຮູ້ຈັກ QR ນີ້ — ກະລຸນາສະແກນ Lightning ຫຼື LAO QR';
+      });
     }
   }
 
   Future<void> _pay() async {
     if (_decoded == null) return;
 
-    int sats = _decoded!.amountSats;
-    if (sats <= 0) {
+    final type = detectQRType(_invoiceCtrl.text.trim());
+
+    // ✅ ສຳລັບ LNURL + Lightning Address: ໃຊ້ input ຂອງ user ສະເໝີ
+    int sats;
+    if (type == QRType.lnurl || _decoded!.isAddress) {
       sats = int.tryParse(_amountSatsCtrl.text.trim()) ?? 0;
+    } else {
+      sats = _decoded!.amountSats > 0
+          ? _decoded!.amountSats
+          : (int.tryParse(_amountSatsCtrl.text.trim()) ?? 0);
     }
 
     if (sats <= 0) {
-      setState(() => _error = 'ກະລຸນາໃສ່ຈຳນວນ sats ທີ່ຖືກຕ້ອງ');
+      setState(() => _error = 'ກະລຸນາໃສ່ຈຳນວນ sats');
       return;
     }
 
+    // ✅ ກວດ LNURL min/max
+    if (type == QRType.lnurl) {
+      if (_decoded!.minSats > 0 && sats < _decoded!.minSats) {
+        setState(() => _error = 'ຕ້ອງການຢ່າງໜ້ອຍ ${_decoded!.minSats} sats');
+        return;
+      }
+      if (_decoded!.maxSats > 0 && sats > _decoded!.maxSats) {
+        setState(() => _error = 'ສູງສຸດ ${_decoded!.maxSats} sats');
+        return;
+      }
+    }
+
     setState(() => _loading = true);
-    final res = await PaymentService.instance.pay(
-      paymentRequest: _invoiceCtrl.text.trim(),
-      memo: _decoded!.description,
-      amountSats: _decoded!.amountSats == 0 ? sats : null,
-    );
+
+    final input = _invoiceCtrl.text.trim();
+    late dynamic res;
+
+    if (type == QRType.lnurl) {
+      res = await PaymentService.instance.payLNURL(
+        lnurl: input,
+        amountSats: sats,
+        memo: _decoded!.description,
+      );
+    } else {
+      res = await PaymentService.instance.pay(
+        paymentRequest: input,
+        memo: _decoded!.description,
+        amountSats: _decoded!.amountSats == 0 ? sats : null,
+      );
+    }
 
     if (!mounted) return;
     setState(() => _loading = false);
 
     if (res.success) {
+      final payData = res.data as Map<String, dynamic>? ?? {};
+      final actualSats = (payData['amountSats'] as num?)?.toInt() ?? sats;
+      final actualLAK = (payData['amountLAK'] as num?)?.toDouble() ?? 0.0;
+
       Navigator.pop(context);
       widget.onSuccess?.call();
 
@@ -117,8 +193,8 @@ class _SendSheetState extends State<SendSheet> {
           receiverName: _decoded!.description.isNotEmpty
               ? _decoded!.description
               : 'Unknown Merchant',
-          amountLAK: _decoded!.amountLAK.toDouble(),
-          amountSats: sats,
+          amountLAK: actualLAK,
+          amountSats: actualSats,
           memo: _decoded!.description,
         ),
       );
@@ -231,15 +307,25 @@ class _SendSheetState extends State<SendSheet> {
     );
   }
 
+  // ── build ──────────────────────────────────────────────────────────────
   Widget _buildConfirmScreen() {
-    final formatCurrency = NumberFormat("#,##0", "en_US");
+    final fmt = NumberFormat("#,##0", "en_US");
+    final type = detectQRType(_invoiceCtrl.text.trim());
 
-    final double amountLak = _decoded?.amountLAK.toDouble() ?? 0.0;
-    final int amountSats = _decoded?.amountSats ?? 0;
-    final String description = _decoded?.description ?? 'Unknown Merchant';
+    // ✅ ໃຊ້ _displayLAK + _displaySats ທີ່ update real-time
+    final showLAK = _displayLAK > 0
+        ? _displayLAK
+        : _decoded!.amountLAK.toDouble();
+    final showSats = _displaySats > 0 ? _displaySats : _decoded!.amountSats;
+
+    // ✅ ສະແດງ input field ສຳລັບ LNURL, Lightning Address, ຫຼື BOLT11 ທີ່ amount=0
+    final needInput =
+        type == QRType.lnurl ||
+        _decoded!.isAddress ||
+        _decoded!.amountSats == 0;
 
     final String balanceStr = widget.wallet != null
-        ? formatCurrency.format(widget.wallet!.balanceLAK)
+        ? fmt.format(widget.wallet!.balanceLAK)
         : '0';
 
     return Container(
@@ -297,8 +383,9 @@ class _SendSheetState extends State<SendSheet> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                // ✅ ສະແດງ LAK real-time
                 Text(
-                  '${formatCurrency.format(amountLak)} LAK',
+                  '${fmt.format(showLAK)} LAK',
                   style: const TextStyle(
                     color: Colors.orange,
                     fontSize: 28,
@@ -307,23 +394,39 @@ class _SendSheetState extends State<SendSheet> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sats ${formatCurrency.format(amountSats)}',
+                  'Sats ${fmt.format(showSats)}',
                   style: const TextStyle(
                     color: Colors.grey,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (amountSats == 0) ...[
+
+                // ✅ ສະແດງ hint min/max ສຳລັບ LNURL
+                if (type == QRType.lnurl && _decoded!.minSats > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Min: ${fmt.format(_decoded!.minSats)} — Max: ${fmt.format(_decoded!.maxSats)} sats',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ),
+
+                // ✅ input field ສຳລັບທຸກກໍລະນີທີ່ user ຕ້ອງໃສ່ amount
+                if (needInput) ...[
                   const SizedBox(height: 16),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: TextField(
                       controller: _amountSatsCtrl,
                       textAlign: TextAlign.center,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: 'ປ້ອນຈຳນວນ Sats',
                         isDense: true,
+                        suffixText: 'sats',
+                        suffixStyle: const TextStyle(color: Colors.orange),
+                        // ✅ ສະແດງ error ກ່ຽວກັບ amount
+                        errorText: _error,
                       ),
                       keyboardType: TextInputType.number,
                     ),
@@ -335,14 +438,20 @@ class _SendSheetState extends State<SendSheet> {
           const SizedBox(height: 24),
           const Icon(Icons.bolt, color: Colors.orange, size: 56),
           const SizedBox(height: 16),
+          // ✅ ແກ້ໄຂ
           Text(
-            'Pay to Wallet of Sabaidee Wallet user:\n$description',
+            () {
+              final raw = _invoiceCtrl.text;
+              final preview = raw.length > 20
+                  ? '${raw.substring(0, 20)}...'
+                  : raw;
+              final label = _decoded!.description.isNotEmpty
+                  ? _decoded!.description
+                  : preview;
+              return 'Pay to: $label';
+            }(),
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black87,
-              height: 1.4,
-            ),
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
           ),
           const SizedBox(height: 40),
           SizedBox(

@@ -16,10 +16,30 @@ class WalletService {
     return WalletResult.failure(res.message);
   }
 
-  Future<WalletResult<Map<String, dynamic>>> getBalance() async {
+  // ✅ ແກ້ getBalance() ໃຫ້ return WalletModel
+  Future<WalletResult<WalletModel>> getBalance() async {
     final res = await _api.get(AppConstants.walletBalance);
     if (res.success && res.data?['balance'] != null) {
-      return WalletResult.success(res.data!['balance'] as Map<String, dynamic>);
+      final b = res.data!['balance'] as Map<String, dynamic>;
+
+      final wallet = WalletModel(
+        walletId: '',
+        walletName: '',
+        invoiceKey: '',
+        balanceSats: ((b['sats'] as num?)?.toInt() ?? 0).clamp(
+          0,
+          999999999,
+        ), // ✅
+        balanceLAK: ((b['lak'] as num?)?.toInt() ?? 0).clamp(0, 999999999), // ✅
+        rate: b['btcToLAK'] != null
+            ? RateModel(
+                btcToUSD: (b['btcToUSD'] as num?)?.toDouble() ?? 0,
+                btcToLAK: (b['btcToLAK'] as num?)?.toDouble() ?? 0,
+                usdToLAK: 0,
+              )
+            : null,
+      );
+      return WalletResult.success(wallet);
     }
     return WalletResult.failure(res.message);
   }

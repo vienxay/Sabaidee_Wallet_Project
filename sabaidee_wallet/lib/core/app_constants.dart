@@ -50,6 +50,7 @@ class AppConstants {
   static const paymentLaoQRLimit = '/api/payment/laoqr/limit-status';
   static const paymentTransfer = '/api/payment/transfer';
   static const paymentTransferLookup = '/api/payment/transfer/lookup';
+  static const String paymentPayLNURL = '/api/payment/pay-lnurl';
 
   // ─── Transactions ─────────────────────────────────────────────────────────────
   static const String transactions = '/api/transactions';

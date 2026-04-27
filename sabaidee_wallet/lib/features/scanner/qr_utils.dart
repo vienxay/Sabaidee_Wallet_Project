@@ -4,29 +4,35 @@
 //   • detectQRType()
 //   • LaoQRInfo model
 
-enum QRType { unknown, lightning, laoQR }
+enum QRType { unknown, lightning, lnurl, laoQR } // ✅ ເພີ່ມ lnurl
 
 QRType detectQRType(String raw) {
   final trimmed = raw.trim();
   final lower = trimmed.toLowerCase();
 
-  // ── 1. ກວດ Lightning (ຈ່າຍດ້ວຍ Bitcoin) ──
-  // ກວດທັງ Invoice (lnbc) ແລະ Address (user@domain)
+  // ── 1. LNURL (ຕ້ອງກວດກ່ອນ Lightning!) ──────────────────────────────────
+  if (lower.startsWith('lnurl')) {
+    // ✅ ເພີ່ມ
+    return QRType.lnurl;
+  }
+
+  // ── 2. Lightning Invoice ຫຼື Lightning Address ───────────────────────────
   final isLnAddress = RegExp(
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
   ).hasMatch(trimmed);
+
   if (lower.startsWith('lnbc') ||
       lower.startsWith('lightning:') ||
       isLnAddress) {
     return QRType.lightning;
   }
 
-  // ── 2. ກວດ LaoQR ມາດຕະຖານ (ໃຊ້ໄດ້ແທ້ກັບທະນາຄານ) ──
+  // ── 3. LAO QR ມາດຕະຖານ ─────────────────────────────────────────────────
   if (trimmed.startsWith('000201')) {
     return QRType.laoQR;
   }
 
-  // ── 3. ກວດ Keywords ທະນາຄານໃນລາວ ──
+  // ── 4. Keywords ທະນາຄານລາວ ──────────────────────────────────────────────
   final laoKeywords = [
     'lapnet',
     'bcel',
@@ -40,9 +46,7 @@ QRType detectQRType(String raw) {
     return QRType.laoQR;
   }
 
-  // ── 4. ໂຕເດໂມ (Demo Logic) ──
-  // ໃຫ້ກວດເປັນອັນສຸດທ້າຍ! ຖ້າບໍ່ແມ່ນ Lightning ແລະ ບໍ່ແມ່ນ Standard LaoQR
-  // ແຕ່ເປັນຕົວເລກ 8 ຕົວຂຶ້ນໄປ ຫຼື ຕົວໜັງສືໃຫຍ່ ໃຫ້ສົມມຸດວ່າເປັນ LaoQR (Demo)
+  // ── 5. Demo LaoQR ────────────────────────────────────────────────────────
   if (RegExp(r'^\d{8,15}$').hasMatch(trimmed) ||
       RegExp(r'^[0-9A-Z]{8,}$').hasMatch(trimmed.toUpperCase())) {
     return QRType.laoQR;

@@ -150,8 +150,8 @@ class TransactionModel {
 
   bool get isReceive => type == 'topup' || type == 'receive';
   bool get isSend => type == 'withdraw' || type == 'pay';
-  bool get isSuccess => status == 'success';
-  bool get isPending => status == 'pending';
+  bool get isSuccess => status == 'ສຳເລັດ';
+  bool get isPending => status == 'ລໍຖ້າດຳເນີນການ';
 }
 
 // ─── Invoice Decode Model ─────────────────────────────────────────────────────
@@ -162,22 +162,107 @@ class DecodedInvoiceModel {
   final int expiry;
   final RateModel? rate;
 
+  // ✅ ເພີ່ມ fields ສຳລັບ LNURL + Lightning Address
+  final bool isLNURL;
+  final bool isAddress;
+  final int minSats;
+  final int maxSats;
+  final int minLAK;
+  final int maxLAK;
+
   const DecodedInvoiceModel({
     required this.amountSats,
     required this.amountLAK,
     required this.description,
     required this.expiry,
     this.rate,
+    this.isLNURL = false,
+    this.isAddress = false,
+    this.minSats = 0,
+    this.maxSats = 0,
+    this.minLAK = 0,
+    this.maxLAK = 0,
   });
 
   factory DecodedInvoiceModel.fromJson(Map<String, dynamic> j) {
     final inv = j['invoice'] as Map<String, dynamic>? ?? j;
+
+    final isLNURL = inv['isLNURL'] as bool? ?? false;
+    final isAddress = inv['isAddress'] as bool? ?? false;
+
+    // ✅ LNURL: ໃຊ້ minSats, Lightning Address: amountSats = 0, BOLT11: amountSats
+    final amountSats = isLNURL
+        ? (inv['minSats'] as num?)?.toInt() ?? 0
+        : (inv['amountSats'] as num?)?.toInt() ?? 0;
+
+    final amountLAK = isLNURL
+        ? (inv['minLAK'] as num?)?.toInt() ?? 0
+        : (inv['amountLAK'] as num?)?.toInt() ?? 0;
+
     return DecodedInvoiceModel(
-      amountSats: (inv['amountSats'] as num?)?.toInt() ?? 0,
-      amountLAK: (inv['amountLAK'] as num?)?.toInt() ?? 0,
-      description: inv['description'] as String? ?? '',
+      amountSats: amountSats,
+      amountLAK: amountLAK,
+      description:
+          inv['description'] as String? ??
+          inv['defaultDescription'] as String? ??
+          (isAddress ? 'Pay to ${inv['payee'] ?? ''}' : 'LNURL Payment'),
       expiry: (inv['expiry'] as num?)?.toInt() ?? 0,
       rate: inv['rate'] != null ? RateModel.fromJson(inv['rate']) : null,
+      isLNURL: isLNURL,
+      isAddress: isAddress,
+      minSats: (inv['minSats'] as num?)?.toInt() ?? 0,
+      maxSats: (inv['maxSats'] as num?)?.toInt() ?? 0,
+      minLAK: (inv['minLAK'] as num?)?.toInt() ?? 0,
+      maxLAK: (inv['maxLAK'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ✅ Models ໃໝ່ (ເພີ່ມໃສ່ app_models.dart ຖ້າຕ້ອງການ)
+// ════════════════════════════════════════════════════════════════════════════
+
+/// LAO QR daily limit info
+class LaoQRLimitModel {
+  final bool isKYCVerified;
+  final int dailyLimit;
+  final int todaySpent;
+  final int remaining;
+  final int percentage;
+
+  const LaoQRLimitModel({
+    required this.isKYCVerified,
+    required this.dailyLimit,
+    required this.todaySpent,
+    required this.remaining,
+    required this.percentage,
+  });
+
+  factory LaoQRLimitModel.fromJson(Map<String, dynamic> j) => LaoQRLimitModel(
+    isKYCVerified: j['isKYCVerified'] ?? false,
+    dailyLimit: j['dailyLimit'] ?? 2000000,
+    todaySpent: j['todaySpent'] ?? 0,
+    remaining: j['remaining'] ?? 2000000,
+    percentage: j['percentage'] ?? 0,
+  );
+}
+
+/// Receiver preview info
+class ReceiverInfoModel {
+  final String name;
+  final String account;
+  final String? profileImage;
+
+  const ReceiverInfoModel({
+    required this.name,
+    required this.account,
+    this.profileImage,
+  });
+
+  factory ReceiverInfoModel.fromJson(Map<String, dynamic> j) =>
+      ReceiverInfoModel(
+        name: j['name'] ?? '',
+        account: j['account'] ?? '',
+        profileImage: j['profileImage'],
+      );
 }

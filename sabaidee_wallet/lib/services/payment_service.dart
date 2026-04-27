@@ -10,7 +10,7 @@ class PaymentService {
   final _api = ApiClient.instance;
 
   // ════════════════════════════════════════════════════════════════════════
-  // ⚡ Lightning — ຄືເດີມ
+  // ⚡ Lightning
   // ════════════════════════════════════════════════════════════════════════
 
   Future<WalletResult<DecodedInvoiceModel>> decodeInvoice(
@@ -47,11 +47,31 @@ class PaymentService {
     return WalletResult.failure(res.message);
   }
 
+  // ✅ ເພີ່ມ: LNURL Payment
+  Future<WalletResult<Map<String, dynamic>>> payLNURL({
+    required String lnurl,
+    required int amountSats,
+    String memo = '',
+  }) async {
+    final res = await _api.post(AppConstants.paymentPayLNURL, {
+      'lnurl': lnurl,
+      'amountSats': amountSats,
+      if (memo.isNotEmpty) 'memo': memo,
+    });
+
+    if (res.success && res.data?['payment'] != null) {
+      return WalletResult.success(res.data!['payment'] as Map<String, dynamic>);
+    }
+    if (res.data?['requireKYC'] == true) {
+      return WalletResult.failure(res.message, requireKYC: true);
+    }
+    return WalletResult.failure(res.message);
+  }
+
   // ════════════════════════════════════════════════════════════════════════
-  // 🇱🇦 LAO QR — ໃໝ່
+  // 🇱🇦 LAO QR
   // ════════════════════════════════════════════════════════════════════════
 
-  /// ຈ່າຍ LAO QR (Demo)
   Future<WalletResult<Map<String, dynamic>>> payLaoQR({
     required int amountLAK,
     String merchantName = '',
@@ -76,7 +96,6 @@ class PaymentService {
     return WalletResult.failure(res.message);
   }
 
-  /// ດຶງຍອດ LAO QR ວັນນີ້
   Future<WalletResult<LaoQRLimitModel>> getLaoQRLimitStatus() async {
     final res = await _api.get(AppConstants.paymentLaoQRLimit);
     if (res.success && res.data != null) {
@@ -86,10 +105,9 @@ class PaymentService {
   }
 
   // ════════════════════════════════════════════════════════════════════════
-  // 🔄 Internal Transfer — ໃໝ່
+  // 🔄 Internal Transfer
   // ════════════════════════════════════════════════════════════════════════
 
-  /// ຄົ້ນຫາຜູ້ຮັບ (preview ກ່ອນໂອນ)
   Future<WalletResult<ReceiverInfoModel>> lookupReceiver(String q) async {
     final res = await _api.get(
       '${AppConstants.paymentTransferLookup}?q=${Uri.encodeComponent(q)}',
@@ -102,9 +120,8 @@ class PaymentService {
     return WalletResult.failure(res.message);
   }
 
-  /// ໂອນເງິນລະຫວ່າງ Sabaidee Wallet users
   Future<WalletResult<Map<String, dynamic>>> transfer({
-    required String receiverIdentifier, // email ຫຼື phone
+    required String receiverIdentifier,
     required int amountLAK,
     String memo = '',
   }) async {
@@ -122,53 +139,4 @@ class PaymentService {
     }
     return WalletResult.failure(res.message);
   }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// ✅ Models ໃໝ່ (ເພີ່ມໃສ່ app_models.dart ຖ້າຕ້ອງການ)
-// ════════════════════════════════════════════════════════════════════════════
-
-/// LAO QR daily limit info
-class LaoQRLimitModel {
-  final bool isKYCVerified;
-  final int dailyLimit;
-  final int todaySpent;
-  final int remaining;
-  final int percentage;
-
-  const LaoQRLimitModel({
-    required this.isKYCVerified,
-    required this.dailyLimit,
-    required this.todaySpent,
-    required this.remaining,
-    required this.percentage,
-  });
-
-  factory LaoQRLimitModel.fromJson(Map<String, dynamic> j) => LaoQRLimitModel(
-    isKYCVerified: j['isKYCVerified'] ?? false,
-    dailyLimit: j['dailyLimit'] ?? 2000000,
-    todaySpent: j['todaySpent'] ?? 0,
-    remaining: j['remaining'] ?? 2000000,
-    percentage: j['percentage'] ?? 0,
-  );
-}
-
-/// Receiver preview info
-class ReceiverInfoModel {
-  final String name;
-  final String account;
-  final String? profileImage;
-
-  const ReceiverInfoModel({
-    required this.name,
-    required this.account,
-    this.profileImage,
-  });
-
-  factory ReceiverInfoModel.fromJson(Map<String, dynamic> j) =>
-      ReceiverInfoModel(
-        name: j['name'] ?? '',
-        account: j['account'] ?? '',
-        profileImage: j['profileImage'],
-      );
 }

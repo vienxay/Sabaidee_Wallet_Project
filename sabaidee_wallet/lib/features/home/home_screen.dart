@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final results = await Future.wait([
       AuthService.instance.getMe(),
-      WalletService.instance.getWallet(),
+      WalletService.instance.getBalance(), // ✅ ປ່ຽນຈາກ getWallet → getBalance
       TransactionService.instance.getTransactions(limit: 5),
     ]);
 
@@ -149,34 +149,83 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   // ─── Content ──────────────────────────────────────────────────────────────
-  Widget _buildContent() => SingleChildScrollView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        HomeTopBar(scaffoldKey: _scaffoldKey, user: _user),
-        const SizedBox(height: 12),
+  Widget _buildContent() {
+    // ✅ ເພີ່ມ filter ນີ້
+    final successTx = _recentTx.where((tx) => tx.status == 'success').toList();
 
-        HomeBalanceCard(
-          wallet: _wallet,
-          balanceVisible: _balanceVisible,
-          onToggleVisibility: () =>
-              setState(() => _balanceVisible = !_balanceVisible),
-        ),
-        const SizedBox(height: 20),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          HomeTopBar(scaffoldKey: _scaffoldKey, user: _user),
+          const SizedBox(height: 12),
+          HomeBalanceCard(
+            wallet: _wallet,
+            balanceVisible: _balanceVisible,
+            onToggleVisibility: () =>
+                setState(() => _balanceVisible = !_balanceVisible),
+          ),
+          const SizedBox(height: 20),
+          HomeActionButtons(
+            onReceive: _openReceive,
+            onSend: () => _openScanner(title: 'ສະແກນເພື່ອສົ່ງ'),
+          ),
+          const SizedBox(height: 24),
 
-        HomeActionButtons(
-          onReceive: _openReceive,
-          onSend: () => _openScanner(title: 'ສະແກນເພື່ອສົ່ງ'),
-        ),
-        const SizedBox(height: 24),
+          // ✅ ສະແດງສະເພາະ success transaction
+          if (successTx.isNotEmpty)
+            HomeRecentTx(tx: successTx.first)
+          else
+            _buildEmptyTx(),
 
-        if (_recentTx.isNotEmpty) HomeRecentTx(tx: _recentTx.first),
-        const SizedBox(height: 24),
+          const SizedBox(height: 24),
+          HomeHistoryBtn(onTap: _openHistory),
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
 
-        HomeHistoryBtn(onTap: _openHistory),
-        const SizedBox(height: 100),
-      ],
+  Widget _buildEmptyTx() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 40,
+            color: AppColors.textGrey,
+          ),
+          SizedBox(height: 8),
+          Text(
+            'ຍັງບໍ່ມີທຸລະກຳ',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textGrey,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'TopUp ເພື່ອເລີ່ມໃຊ້ງານ',
+            style: TextStyle(fontSize: 12, color: AppColors.textGrey),
+          ),
+        ],
+      ),
     ),
   );
 

@@ -21,6 +21,8 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
   String? _error;
   Timer? _pollTimer;
   bool _paid = false;
+  int _amountSats = 0; // ✅ ເພີ່ມ: preview sats
+  int _amountLAK = 0; // ✅ ເພີ່ມ: ເກັບ LAK
 
   @override
   void dispose() {
@@ -29,19 +31,46 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     super.dispose();
   }
 
+  // ✅ ແກ້ໄຂ: convert LAK → sats ກ່ອນ createInvoice
   Future<void> _createInvoice() async {
-    final sats = int.tryParse(_amountCtrl.text.trim());
-    if (sats == null || sats <= 0) {
-      setState(() => _error = 'ກະລຸນາໃສ່ຈຳນວນ sats ທີ່ຖືກຕ້ອງ');
+    final lak = int.tryParse(_amountCtrl.text.trim());
+    if (lak == null || lak <= 0) {
+      setState(() => _error = 'ກະລຸນາໃສ່ຈຳນວນ LAK ທີ່ຖືກຕ້ອງ');
       return;
     }
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
+    // ✅ ດຶງ rate ກ່ອນ
+    final rateRes = await WalletService.instance.getRate();
+    if (!mounted) return;
+
+    if (!rateRes.success || rateRes.data == null) {
+      setState(() {
+        _loading = false;
+        _error = 'ດຶງ rate ບໍ່ສຳເລັດ';
+      });
+      return;
+    }
+
+    final rate = rateRes.data!;
+    // ✅ LAK → sats
+    final sats = ((lak / rate.btcToLAK) * 100_000_000).round();
+
+    if (sats <= 0) {
+      setState(() {
+        _loading = false;
+        _error = 'ຈຳນວນ LAK ໜ້ອຍເກີນໄປ';
+      });
+      return;
+    }
+
     final res = await WalletService.instance.createTopUpInvoice(
       amountSats: sats,
+      memo: 'TopUp $lak LAK',
     );
 
     if (!mounted) return;
@@ -50,6 +79,8 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
         _loading = false;
         _invoice = res.data!['paymentRequest'] as String?;
         _paymentHash = res.data!['paymentHash'] as String?;
+        _amountSats = sats;
+        _amountLAK = lak;
       });
       _startPolling();
     } else {
@@ -60,25 +91,19 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     }
   }
 
-  // ─── Poll ທຸກ 5 ວິ ກວດວ່າໄດ້ຮັບເງິນ ──────────────────────────────────────
   void _startPolling() {
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (_paymentHash == null) return;
-
       final res = await WalletService.instance.checkPaymentStatus(
         paymentHash: _paymentHash!,
       );
-
       if (!mounted) return;
-
       if (res.success && res.data?['paid'] == true) {
         _pollTimer?.cancel();
         setState(() => _paid = true);
-
-        // ✅ ລໍ 2 ວິ ໃຫ້ user ເຫັນ success ແລ້ວປິດ + refresh home
         await Future.delayed(const Duration(seconds: 2));
         if (!mounted) return;
-        Navigator.pop(context, true); // true = signal ໃຫ້ home refresh
+        Navigator.pop(context, true);
       }
     });
   }
@@ -95,10 +120,25 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     );
   }
 
+  // ✅ ເພີ່ມ: update preview ຂະນະ user ໃສ່
+  Future<void> _onAmountChanged(String val) async {
+    final lak = int.tryParse(val) ?? 0;
+    if (lak <= 0) {
+      setState(() => _amountSats = 0);
+      return;
+    }
+    final rateRes = await WalletService.instance.getRate();
+    if (!mounted) return;
+    if (rateRes.success && rateRes.data != null) {
+      final sats = ((lak / rateRes.data!.btcToLAK) * 100_000_000).round();
+      setState(() => _amountSats = sats);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sats = widget.wallet?.balanceSats ?? 0;
-    final lak = widget.wallet?.balanceLAK ?? 0;
+    final balanceSats = widget.wallet?.balanceSats ?? 0;
+    final balanceLAK = widget.wallet?.balanceLAK ?? 0;
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -143,9 +183,9 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
           ),
           const SizedBox(height: 20),
 
-          // ─── Balance ──────────────────────────────────────────────────────
+          // ─── Balance ───────────────────────────────────────────────────
           Text(
-            '$sats Sats',
+            '$balanceSats Sats',
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
@@ -153,12 +193,12 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             ),
           ),
           Text(
-            '$lak LAK',
+            '$balanceLAK LAK',
             style: const TextStyle(fontSize: 14, color: AppColors.textGrey),
           ),
           const SizedBox(height: 20),
 
-          // ─── Paid ─────────────────────────────────────────────────────────
+          // ─── Paid ──────────────────────────────────────────────────────
           if (_paid) ...[
             const Icon(
               Icons.check_circle_rounded,
@@ -176,14 +216,23 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             ),
             const SizedBox(height: 12),
           ]
-          // ─── Input amount ─────────────────────────────────────────────────
+          // ─── Input LAK ─────────────────────────────────────────────────
           else if (_invoice == null) ...[
             TextField(
               controller: _amountCtrl,
               keyboardType: TextInputType.number,
+              onChanged: _onAmountChanged, // ✅ preview real-time
               decoration: InputDecoration(
-                hintText: 'ຈຳນວນເງິນ LAK',
+                hintText: 'ຈຳນວນ LAK ທີ່ຕ້ອງການ TopUp',
                 hintStyle: const TextStyle(color: AppColors.textGrey),
+                suffixText: 'LAK', // ✅ ສະແດງ unit
+                suffixStyle: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+                // ✅ preview sats
+                helperText: _amountSats > 0 ? '≈ $_amountSats sats' : null,
+                helperStyle: const TextStyle(color: AppColors.primary),
                 filled: true,
                 fillColor: AppColors.inputBackground,
                 border: OutlineInputBorder(
@@ -196,8 +245,18 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             ),
             const SizedBox(height: 16),
           ]
-          // ─── QR + waiting ─────────────────────────────────────────────────
+          // ─── QR + ລໍຖ້າ ────────────────────────────────────────────────
           else ...[
+            // ✅ ສະແດງ amount ທີ່ຈ່າຍ
+            Text(
+              '$_amountLAK LAK  ≈  $_amountSats sats',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
             Container(
               width: 200,
               height: 200,
@@ -265,7 +324,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             const SizedBox(height: 12),
           ],
 
-          // ─── Button ───────────────────────────────────────────────────────
+          // ─── Button ────────────────────────────────────────────────────
           if (!_paid)
             SizedBox(
               width: double.infinity,

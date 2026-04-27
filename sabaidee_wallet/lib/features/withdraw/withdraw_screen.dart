@@ -283,11 +283,17 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   return 'ກະລຸນາໃສ່ Lightning Address ຫຼື Invoice';
                 }
                 final clean = v.trim();
+
                 final isAddr = RegExp(
                   r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
                 ).hasMatch(clean);
+
                 final isInvoice = clean.toLowerCase().startsWith('lnbc');
-                if (!isAddr && !isInvoice) {
+
+                // ✅ ເພີ່ມ: ກວດ LNURL
+                final isLNURL = clean.toUpperCase().startsWith('LNURL');
+
+                if (!isAddr && !isInvoice && !isLNURL) {
                   return 'Address ຫຼື Invoice ບໍ່ຖືກຕ້ອງ';
                 }
                 return null;
