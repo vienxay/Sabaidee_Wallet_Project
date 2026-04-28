@@ -1,4 +1,3 @@
-// ─── lib/screens/withdraw/withdraw_screen.dart ──────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -34,12 +33,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   double get _enteredLAK =>
       double.tryParse(_amountLAKController.text.replaceAll(',', '')) ?? 0;
 
-  // ── Live preview: ຄຳນວນ sats ──────────────────────────────────────────────
+  // ── Live preview ─────────────────────────────────────────────────────────
   void _onAmountChanged(String raw) {
     final cleaned = raw.replaceAll(',', '');
     final val = double.tryParse(cleaned) ?? 0;
 
-    // Format with commas
     if (cleaned.isNotEmpty) {
       final formatted = _numberFormat.format(val);
       if (formatted != raw) {
@@ -51,13 +49,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     }
 
     setState(() {
-      // Rough preview: 1 USD ≈ 22,000 LAK, 1 BTC ≈ 60,000 USD → 1 sat ≈ 0.37 LAK
       _previewSats = val > 0 ? (val / 0.37).roundToDouble() : null;
     });
   }
 
-  // ── Confirm → Preview → Navigate ────────────────────────────────────────────
-  // ── Confirm → Preview → Navigate ─────────────────────────────────────────
+  // ── Withdraw Flow ─────────────────────────────────────────────────────────
   Future<void> _onWithdraw() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -67,25 +63,20 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     });
 
     try {
-      // ✅ Fix 1: use .instance  |  Fix 2: .round() converts double → int
       final previewResult = await WithdrawalService.instance.preview(
         destination: _addressController.text.trim(),
-        amountLAK: _enteredLAK.round(), // ← double → int
+        amountLAK: _enteredLAK.round(),
       );
 
       if (!mounted) return;
 
-      // ✅ Fix 3: access WalletResult fields, NOT map keys
       if (previewResult.success && previewResult.data != null) {
-        final previewData = previewResult.data!;
-
-        final confirmed = await _showConfirmDialog(previewData);
+        final confirmed = await _showConfirmDialog(previewResult.data!);
         if (!confirmed) return;
 
         final sendResult = await WithdrawalService.instance.send(
-          // ✅ .instance
           destination: _addressController.text.trim(),
-          amountLAK: _enteredLAK.round(), // ← double → int
+          amountLAK: _enteredLAK.round(),
           memo: 'Withdraw',
         );
 
@@ -103,14 +94,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
           _showError(sendResult.message ?? 'ຖອນເງິນບໍ່ສຳເລັດ');
         }
       } else {
-        // ✅ Fix 4: use .requireKYC and .message, not map keys
-        if (previewResult.requireKYC) {
-          _showKYCDialog();
-        } else {
-          setState(() {
-            _previewError = previewResult.message;
-          });
-        }
+        // ✅ ສະແດງ error ຕົງໆ — ບໍ່ຕ້ອງ KYC ສຳລັບການຖອນ
+        setState(() {
+          _previewError = previewResult.message;
+        });
       }
     } catch (e) {
       _showError(e.toString());
@@ -123,7 +110,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     }
   }
 
-  // ✅ Fix 5: accept WithdrawalPreviewModel, not raw Map
   Future<bool> _showConfirmDialog(WithdrawalPreviewModel preview) async {
     return await showModalBottomSheet<bool>(
           context: context,
@@ -158,39 +144,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     );
   }
 
-  void _showKYCDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'ຕ້ອງການ KYC',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text('ກະລຸນາຢືນຢັນຕົວຕົນ (KYC) ເພື່ອຖອນເງິນຈຳນວນນີ້'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ປິດ'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF8C00),
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: navigate to KYC screen
-            },
-            child: const Text(
-              'ເລີ່ມ KYC',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _addressController.dispose();
@@ -198,7 +151,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     super.dispose();
   }
 
-  // ── UI ───────────────────────────────────────────────────────────────────
+  // ── UI ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final balanceLAKFmt = _numberFormat.format(widget.balanceLAK.round());
@@ -222,7 +175,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           children: [
-            // ── Balance display ──────────────────────────────────────────────
+            // ── Balance ────────────────────────────────────────────────────
             Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -256,7 +209,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             ),
             const SizedBox(height: 32),
 
-            // ── Lightning Address ────────────────────────────────────────────
+            // ── Lightning Address ──────────────────────────────────────────
             _buildLabel('ໃສ່ Lightning Address ຫຼື Invoice'),
             const SizedBox(height: 8),
             TextFormField(
@@ -283,16 +236,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   return 'ກະລຸນາໃສ່ Lightning Address ຫຼື Invoice';
                 }
                 final clean = v.trim();
-
                 final isAddr = RegExp(
                   r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
                 ).hasMatch(clean);
-
                 final isInvoice = clean.toLowerCase().startsWith('lnbc');
-
-                // ✅ ເພີ່ມ: ກວດ LNURL
                 final isLNURL = clean.toUpperCase().startsWith('LNURL');
-
                 if (!isAddr && !isInvoice && !isLNURL) {
                   return 'Address ຫຼື Invoice ບໍ່ຖືກຕ້ອງ';
                 }
@@ -301,7 +249,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── Amount LAK ──────────────────────────────────────────────────
+            // ── Amount LAK ─────────────────────────────────────────────────
             _buildLabel('Enter Amount'),
             const SizedBox(height: 8),
             TextFormField(
@@ -328,7 +276,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               },
             ),
 
-            // ── Sats preview ─────────────────────────────────────────────────
+            // ── Sats preview ───────────────────────────────────────────────
             if (_previewSats != null)
               Padding(
                 padding: const EdgeInsets.only(top: 6, left: 12),
@@ -338,7 +286,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                 ),
               ),
 
-            // ── Error hint ───────────────────────────────────────────────────
+            // ── Error ──────────────────────────────────────────────────────
             if (_previewError != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -372,8 +320,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               ),
 
             const SizedBox(height: 36),
-
-            // ── Lightning icon ───────────────────────────────────────────────
             Center(
               child: Icon(Icons.bolt, color: const Color(0xFFFF8C00), size: 48),
             ),
@@ -382,7 +328,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         ),
       ),
 
-      // ── Bottom button ──────────────────────────────────────────────────────
+      // ── Bottom Button ─────────────────────────────────────────────────────
       bottomNavigationBar: Padding(
         padding: EdgeInsets.only(
           left: 24,
@@ -425,7 +371,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     );
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
   Widget _buildLabel(String text) => Text(
     text,
     style: const TextStyle(
@@ -473,11 +419,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // Confirm Bottom Sheet
-// ════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 class _ConfirmBottomSheet extends StatelessWidget {
-  final WithdrawalPreviewModel preview; // ✅ typed model
+  final WithdrawalPreviewModel preview;
   const _ConfirmBottomSheet({required this.preview});
 
   @override
@@ -507,7 +453,6 @@ class _ConfirmBottomSheet extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          // ✅ access typed fields directly
           _row(
             'ຈໍານວນ',
             '${fmt.format(preview.amountLAK)} LAK\nSats ${fmt.format(preview.amountSats)}',

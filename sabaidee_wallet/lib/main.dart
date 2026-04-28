@@ -1,5 +1,3 @@
-// lib/main.dart — Sabaidee Wallet
-
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
@@ -19,6 +17,7 @@ import 'features/profile/profile_screen.dart';
 import 'services/auth_service.dart';
 import 'services/kyc_gate_service.dart';
 import 'services/storage_service.dart';
+import 'services/session_timeout_service.dart'; // ✅ ເພີ່ມ
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,10 +37,11 @@ void main() async {
   var isLoggedIn = false;
 
   try {
-    await StorageService.instance.init().timeout(const Duration(seconds: 3));
+    // ✅ ແກ້ 3s → 10s
+    await StorageService.instance.init().timeout(const Duration(seconds: 10));
 
     isLoggedIn = await AuthService.instance.isLoggedIn().timeout(
-      const Duration(seconds: 3),
+      const Duration(seconds: 10), // ✅ ແກ້ 3s → 10s
       onTimeout: () => false,
     );
 
@@ -58,7 +58,6 @@ void main() async {
 
 class SabaideeWallet extends StatefulWidget {
   final bool isLoggedIn;
-
   const SabaideeWallet({super.key, required this.isLoggedIn});
 
   @override
@@ -74,13 +73,17 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
   void initState() {
     super.initState();
     _initDeepLinks();
+
+    // ✅ ເລີ່ມ Session Timeout
+    SessionTimeoutService.instance.init(_navigatorKey);
+    if (widget.isLoggedIn) {
+      SessionTimeoutService.instance.onUserActivity();
+    }
   }
 
   Future<void> _initDeepLinks() async {
     final initialLink = await _appLinks.getInitialLink();
-    if (initialLink != null) {
-      _handleLink(initialLink);
-    }
+    if (initialLink != null) _handleLink(initialLink);
 
     _linkSub = _appLinks.uriLinkStream.listen((uri) {
       _handleLink(uri);
@@ -91,7 +94,6 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     if (uri.scheme != 'sabaidee') return;
 
     final isLoggedIn = await AuthService.instance.isLoggedIn();
-
     if (!isLoggedIn) {
       _navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/login',
@@ -120,6 +122,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
   @override
   void dispose() {
     _linkSub?.cancel();
+    SessionTimeoutService.instance.dispose(); // ✅ ເພີ່ມ
     super.dispose();
   }
 
@@ -136,6 +139,13 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         fontFamily: 'NotoSansLao',
+      ),
+      // ✅ ດັກທຸກ gesture → reset session timer
+      builder: (context, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => SessionTimeoutService.instance.onUserActivity(),
+        onPanDown: (_) => SessionTimeoutService.instance.onUserActivity(),
+        child: child,
       ),
       home: _initialScreen,
       routes: {

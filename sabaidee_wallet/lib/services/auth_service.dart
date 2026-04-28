@@ -99,13 +99,6 @@ class AuthService {
   }
 
   // ─── Get Me ────────────────────────────────────────────────────────────────
-  // Future<UserModel?> getMe() async {
-  //   final res = await _api.get(AppConstants.authMe);
-  //   if (res.success && res.data?['user'] != null) {
-  //     return UserModel.fromJson(res.data!['user']);
-  //   }
-  //   return null;
-  // }
 
   Future<UserModel?> getMe() async {
     try {

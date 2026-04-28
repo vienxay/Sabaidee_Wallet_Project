@@ -1,6 +1,4 @@
-// lib/screens/login_screen.dart
 import 'package:flutter/material.dart';
-// import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
@@ -18,7 +16,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  // bool _isGoogleLoading = false;
+
+  // ✅ ເພີ່ມ initState
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args == 'session_expired') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ໝົດເວລາໃຊ້ງານ — ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -30,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-
     try {
       await AuthService.instance.login(
         email: _emailController.text.trim(),
@@ -45,27 +60,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // ✅ Google Login — ເປີດ browser ໄປ backend OAuth
-  // Future<void> _loginWithGoogle() async {
-  //   setState(() => _isGoogleLoading = true);
-
-  //   try {
-  //     final uri = Uri.parse(
-  //       '${AppConstants.apiBaseUrl}${AppConstants.authGoogle}',
-  //     );
-
-  //     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-  //       throw Exception('ບໍ່ສາມາດເປີດ Google Login ໄດ້');
-  //     }
-  //     // ✅ ຫຼັງຈາກນີ້ GoogleCallbackScreen ຈະຮັບ deep link ອັດຕະໂນມັດ
-  //   } catch (e) {
-  //     if (!mounted) return;
-  //     _showError(e.toString().replaceAll('Exception: ', ''));
-  //   } finally {
-  //     if (mounted) setState(() => _isGoogleLoading = false);
-  //   }
-  // }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context)
@@ -88,11 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: () {
-            // ✅ ກວດວ່າສາມາດ pop ໄດ້ບໍ່
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             } else {
-              // ໄປຫນ້າ Register ແທນ
               Navigator.pushReplacementNamed(context, '/register');
             }
           },
@@ -108,14 +100,11 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-
-                // ── Title ─────────────────────────────────────────────────
                 Text(
                   'Welcome Back',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
-                    // ✅ ລຶບ underline ອອກ
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -128,7 +117,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // ── Email ─────────────────────────────────────────────────
                 CustomTextField(
                   controller: _emailController,
                   hintText: 'Email',
@@ -146,7 +134,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
 
-                // ── Password ──────────────────────────────────────────────
                 CustomTextField(
                   controller: _passwordController,
                   hintText: 'Password',
@@ -161,7 +148,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                 ),
 
-                // ── Forgot Password ───────────────────────────────────────
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
@@ -181,41 +167,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                // ── Sign In Button ─────────────────────────────────────────
                 CustomButton(
                   text: 'ເຂົ້າສູ່ລະບົບ',
                   isLoading: _isLoading,
-                  backgroundColor: AppColors.primary, // ✅ AppColors.primary
+                  backgroundColor: AppColors.primary,
                   onPressed: _isLoading ? null : _login,
                 ),
-                const SizedBox(height: 28),
-
-                // ── Divider ───────────────────────────────────────────────
-                // const _OrDivider(),
-                // const SizedBox(height: 28),
-
-                // ── Google Button ─────────────────────────────────────────
-                // CustomButton(
-                //   text: 'Continue with Google',
-                //   textColor: AppColors.textSecondary,
-                //   variant: ButtonVariant.outlined,
-                //   isLoading: _isGoogleLoading, // ✅ loading state
-                //   icon: Image.asset(
-                //     'assets/images/google-logo.png',
-                //     height: 22,
-                //     width: 22,
-                //   ),
-                //   onPressed: _isGoogleLoading ? null : _loginWithGoogle, // ✅
-                // ),
                 const SizedBox(height: 32),
 
-                // ── Sign Up Link ──────────────────────────────────────────
                 Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        "ຍັງບໍ່ມີບັນຊີ? ",
+                        'ຍັງບໍ່ມີບັນຊີ? ',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -244,26 +209,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
-// ── Sub Widgets ───────────────────────────────────────────────────────────────
-
-// class _OrDivider extends StatelessWidget {
-//   const _OrDivider();
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Row(
-//       children: [
-//         const Expanded(child: Divider(thickness: 1)),
-//         Padding(
-//           padding: const EdgeInsets.symmetric(horizontal: 12),
-//           child: Text(
-//             'or continue with',
-//             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-//           ),
-//         ),
-//         const Expanded(child: Divider(thickness: 1)),
-//       ],
-//     );
-//   }
-// }

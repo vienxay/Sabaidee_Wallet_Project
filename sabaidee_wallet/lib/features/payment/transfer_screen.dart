@@ -1,14 +1,12 @@
-// ─── transfer_screen.dart ────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'transfer_confirm_screen.dart'; // ✅ ເພີ່ມ
+import 'transfer_confirm_screen.dart';
 import '../../services/daily_limit_service.dart';
 
 class TransferScreen extends StatefulWidget {
   final String senderName;
   final String senderAccount;
   final String? senderAvatarUrl;
-
   final String receiverName;
   final String receiverAccount;
   final String? receiverAvatarUrl;
@@ -37,10 +35,6 @@ class _TransferScreenState extends State<TransferScreen>
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
 
-  // ── Quick amounts ──
-  // static const _quickAmounts = ['50,000', '100,000', '200,000', '500,000'];
-
-  // ✅ ເພີ່ມຫຼັງ static const _quickAmounts
   int _todaySpent = 0;
   int _dailyLimit = DailyLimitService.limitUnverified;
   bool _limitLoaded = false;
@@ -80,11 +74,6 @@ class _TransferScreenState extends State<TransferScreen>
     _memoCtrl.dispose();
     super.dispose();
   }
-
-  // void _fillAmount(String label) {
-  //   _amountCtrl.text = label.replaceAll(',', '');
-  //   setState(() {});
-  // }
 
   void _onNext() {
     if (_formKey.currentState!.validate()) {
@@ -129,24 +118,14 @@ class _TransferScreenState extends State<TransferScreen>
                           _buildLimitBar(),
                           const SizedBox(height: 16),
                         ],
-
-                        // ── Amount ──
                         _buildLabel('ຈຳນວນເງິນ (LAK)', required: true),
                         const SizedBox(height: 20),
                         _buildAmountField(),
                         const SizedBox(height: 12),
-
-                        // ── Quick chips ──
-                        // _buildQuickChips(),
-                        // const SizedBox(height: 20),
-
-                        // ── Memo ──
                         _buildLabel('ເນື້ອໃນ', required: true),
                         const SizedBox(height: 20),
                         _buildMemoField(),
                         const SizedBox(height: 32),
-
-                        // ── Next button ──
                         _buildNextButton(),
                       ],
                     ),
@@ -160,8 +139,6 @@ class _TransferScreenState extends State<TransferScreen>
     );
   }
 
-  // Header (orange)
-  // ═══════════════════
   Widget _buildHeader(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -175,9 +152,8 @@ class _TransferScreenState extends State<TransferScreen>
         bottom: 24,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, // ✅ ເພີ່ມ
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Top bar ── (ຄືເດີມ)
           Row(
             children: [
               GestureDetector(
@@ -211,9 +187,6 @@ class _TransferScreenState extends State<TransferScreen>
             ],
           ),
           const SizedBox(height: 24),
-
-          // ✅ ຈາກ Row → Column
-          // ── ຈາກບັນຊີ ──
           Text(
             'ຈາກບັນຊີ',
             style: TextStyle(
@@ -229,8 +202,6 @@ class _TransferScreenState extends State<TransferScreen>
             avatarIcon: Icons.person,
           ),
           const SizedBox(height: 16),
-
-          // ── ທາບັນຊີ ──
           Text(
             'ຫາບັນຊີ',
             style: TextStyle(
@@ -250,7 +221,6 @@ class _TransferScreenState extends State<TransferScreen>
     );
   }
 
-  // ✅ ເພີ່ມກ່ອນ _buildLabel()
   Widget _buildLimitBar() {
     final remaining = _dailyLimit - _todaySpent;
     final progress = (_todaySpent / _dailyLimit).clamp(0.0, 1.0);
@@ -309,95 +279,29 @@ class _TransferScreenState extends State<TransferScreen>
     );
   }
 
-  // ── Account row (avatar + name + account)
-  // Widget _buildAccountRow({
-  //   required String name,
-  //   required String account,
-  //   String? avatarUrl,
-  //   IconData avatarIcon = Icons.person,
-  //   bool alignEnd = false,
-  // }) {
-  //   final avatar = Container(
-  //     width: 44,
-  //     height: 44,
-  //     decoration: BoxDecoration(
-  //       color: Colors.white,
-  //       shape: BoxShape.circle,
-  //       border: Border.all(
-  //         color: Colors.white.withValues(alpha: 0.6),
-  //         width: 2,
-  //       ),
-  //     ),
-  //     child: avatarUrl != null
-  //         ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover))
-  //         : Icon(avatarIcon, color: const Color(0xFFE8820C), size: 24),
-  //   );
-
-  //   final textCol = Column(
-  //     crossAxisAlignment: alignEnd
-  //         ? CrossAxisAlignment.end
-  //         : CrossAxisAlignment.start,
-  //     children: [
-  //       Text(
-  //         name,
-  //         maxLines: 1,
-  //         overflow: TextOverflow.ellipsis,
-  //         style: const TextStyle(
-  //           color: Colors.white,
-  //           fontSize: 13,
-  //           fontWeight: FontWeight.w700,
-  //         ),
-  //       ),
-  //       const SizedBox(height: 2),
-  //       Text(
-  //         account,
-  //         style: TextStyle(
-  //           color: Colors.white.withValues(alpha: 0.75),
-  //           fontSize: 11,
-  //         ),
-  //       ),
-  //     ],
-  //   );
-
-  //   return alignEnd
-  //       ? Row(
-  //           mainAxisAlignment: MainAxisAlignment.end,
-  //           children: [textCol, const SizedBox(width: 8), avatar],
-  //         )
-  //       : Row(
-  //           children: [
-  //             avatar,
-  //             const SizedBox(width: 8),
-  //             Flexible(child: textCol),
-  //           ],
-  //         );
-  // }
-
   Widget _buildAccountRow({
     required String name,
     required String account,
     String? avatarUrl,
     IconData avatarIcon = Icons.person,
   }) {
-    final avatar = Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.6),
-          width: 2,
-        ),
-      ),
-      child: avatarUrl != null
-          ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover))
-          : Icon(avatarIcon, color: const Color(0xFFE8820C), size: 24),
-    );
-
     return Row(
       children: [
-        avatar,
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.6),
+              width: 2,
+            ),
+          ),
+          child: avatarUrl != null
+              ? ClipOval(child: Image.network(avatarUrl, fit: BoxFit.cover))
+              : Icon(avatarIcon, color: const Color(0xFFE8820C), size: 24),
+        ),
         const SizedBox(width: 8),
         Flexible(
           child: Column(
@@ -428,8 +332,6 @@ class _TransferScreenState extends State<TransferScreen>
     );
   }
 
-  // Form fields
-  // ══════════════
   Widget _buildLabel(String text, {bool required = false}) => RichText(
     text: TextSpan(
       text: text,
@@ -496,37 +398,6 @@ class _TransferScreenState extends State<TransferScreen>
     onChanged: (_) => setState(() {}),
   );
 
-  // Widget _buildQuickChips() => Wrap(
-  //   spacing: 8,
-  //   children: _quickAmounts.map((amt) {
-  //     final isSelected = _amountCtrl.text == amt.replaceAll(',', '');
-  //     return GestureDetector(
-  //       onTap: () => _fillAmount(amt),
-  //       child: AnimatedContainer(
-  //         duration: const Duration(milliseconds: 180),
-  //         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-  //         decoration: BoxDecoration(
-  //           color: isSelected ? const Color(0xFFE8820C) : Colors.white,
-  //           borderRadius: BorderRadius.circular(20),
-  //           border: Border.all(
-  //             color: isSelected
-  //                 ? const Color(0xFFE8820C)
-  //                 : Colors.grey.shade300,
-  //           ),
-  //         ),
-  //         child: Text(
-  //           '$amt ກີບ',
-  //           style: TextStyle(
-  //             color: isSelected ? Colors.white : const Color(0xFF555555),
-  //             fontSize: 12,
-  //             fontWeight: FontWeight.w600,
-  //           ),
-  //         ),
-  //       ),
-  //     );
-  //   }).toList(),
-  // );
-
   Widget _buildMemoField() => TextFormField(
     controller: _memoCtrl,
     style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
@@ -557,8 +428,6 @@ class _TransferScreenState extends State<TransferScreen>
         (v == null || v.trim().isEmpty) ? 'ກະລຸນາໃສ່ເນື້ອໃນ' : null,
   );
 
-  // Next button
-  // ════════════
   Widget _buildNextButton() => SizedBox(
     width: double.infinity,
     height: 54,
