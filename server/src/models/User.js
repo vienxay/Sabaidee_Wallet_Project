@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
         isGoogleAccount: { type: Boolean, default: false },
         role: {
             type: String,
-            enum: ['user', 'admin'],
+            enum: ['user', 'admin', 'staff'],
             default: 'user',
         },
 

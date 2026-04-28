@@ -2,7 +2,6 @@
 const User = require('../models/User');
 const Kyc  = require('../models/Kyc');
 const { cloudinary } = require('../services/cloudinaryService');
-// ✅ ເພີ່ມ: import email service
 const { sendKycApprovedEmail, sendKycRejectedEmail } = require('../services/emailService');
 
 const genRefId = () => 'KYC-' + Date.now().toString(36).toUpperCase();
@@ -22,11 +21,10 @@ exports.submitKyc = async (req, res) => {
     console.log('=== KYC Submit ===');
     console.log('body:', req.body);
     console.log('files:', req.files);
-    
+
     try {
         const userId = req.user._id;
 
-        // ✅ Query DB ສົດໆ
         const freshUser = await User.findById(userId).select('kycStatus email name');
         if (!freshUser) {
             return res.status(404).json({ success: false, message: 'ບໍ່ພົບ user' });
@@ -76,6 +74,16 @@ exports.submitKyc = async (req, res) => {
             `kyc/${userId}/idFront`
         );
 
+        // ✅ ແກ້ທີ 1 — upload selfie ຖ້າມີ
+        let selfieUrl = null;
+        if (req.files?.selfie?.[0]) {
+            const selfieResult = await uploadToCloudinary(
+                req.files.selfie[0].buffer,
+                `kyc/${userId}/selfie`
+            );
+            selfieUrl = selfieResult.secure_url;
+        }
+
         // ── Save Kyc document ───────────────────────────────────────────────
         const referenceId = genRefId();
         const kyc = await Kyc.create({
@@ -88,6 +96,7 @@ exports.submitKyc = async (req, res) => {
             passportNumber: passportNumber.toUpperCase(),
             expiryDate:     new Date(expiryDate),
             idFrontUrl:     frontResult.secure_url,
+            selfieUrl,                                  // ✅ ເພີ່ມ selfieUrl
             consentData:    true,
             consentPdpa:    req.body.consentPdpa === 'true',
             referenceId,
@@ -135,7 +144,7 @@ exports.getMyKycStatus = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUT /api/kyc/verify/:userId  (Admin) ✅ ແກ້ໄຂເພີ່ມ Email
+// PUT /api/kyc/verify/:userId  (Admin/Staff)
 // ─────────────────────────────────────────────────────────────────────────────
 exports.reviewKyc = async (req, res) => {
     try {
@@ -148,44 +157,39 @@ exports.reviewKyc = async (req, res) => {
         }
 
         const user = await User.findById(req.params.userId);
-        if (!user) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ User' });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'ບໍ່ພົບ User' });
+        }
 
-        // ✅ ເກັບ email ແລະ name ກ່ອນອັບເດດ (ສຳລັບສົ່ງ email)
-        const userEmail = user.email;
-        const userName = user.name;
+        // ✅ ແກ້ທີ 2 — ກວດ KYC ກ່ອນ review
+        const kyc = await Kyc.findOne({ user: user._id });
+        if (!kyc) {
+            return res.status(404).json({ success: false, message: 'ບໍ່ພົບ KYC ຂອງ User ນີ້' });
+        }
 
-        await Kyc.findOneAndUpdate(
-            { user: user._id },
-            {
-                status,
-                reviewNote:  reviewNote || null,
-                reviewedBy:  req.user._id,
-                reviewedAt:  new Date(),
-            }
-        );
+        await kyc.updateOne({
+            status,
+            reviewNote:  reviewNote || null,
+            reviewedBy:  req.user._id,
+            reviewedAt:  new Date(),
+        });
 
         user.kycStatus = status;
         await user.save();
 
-        // ✅ สົ່ງ Email ແຈ້ງເຕືອນ (async ບໍ່ຕ້ອງລໍ)
+        // ── ສົ່ງ Email ແຈ້ງເຕືອນ ────────────────────────────────────────────
         if (status === 'verified') {
-            sendKycApprovedEmail(userEmail, userName)
+            sendKycApprovedEmail(user.email, user.name)
                 .then(result => {
-                    if (result.success) {
-                        console.log('✅ KYC approval email sent to:', userEmail);
-                    } else {
-                        console.error('❌ Failed to send approval email:', result.error);
-                    }
+                    if (result.success) console.log('✅ KYC approval email sent to:', user.email);
+                    else console.error('❌ Failed to send approval email:', result.error);
                 })
                 .catch(err => console.error('❌ Email error:', err));
         } else if (status === 'rejected') {
-            sendKycRejectedEmail(userEmail, userName, reviewNote)
+            sendKycRejectedEmail(user.email, user.name, reviewNote)
                 .then(result => {
-                    if (result.success) {
-                        console.log('✅ KYC rejection email sent to:', userEmail);
-                    } else {
-                        console.error('❌ Failed to send rejection email:', result.error);
-                    }
+                    if (result.success) console.log('✅ KYC rejection email sent to:', user.email);
+                    else console.error('❌ Failed to send rejection email:', result.error);
                 })
                 .catch(err => console.error('❌ Email error:', err));
         }
@@ -206,11 +210,16 @@ exports.reviewKyc = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/kyc/list?status=pending  (Admin)
+// GET /api/kyc/list?status=pending  (Admin/Staff)
 // ─────────────────────────────────────────────────────────────────────────────
 exports.listKyc = async (req, res) => {
     try {
-        const { status, page = 1, limit = 20 } = req.query;
+        const { status } = req.query;
+
+        // ✅ ແກ້ທີ 3 — convert page/limit ເປັນ Number ກ່ອນໃຊ້
+        const pageNum  = Number(req.query.page)  || 1;
+        const limitNum = Number(req.query.limit) || 20;
+
         const filter = status
             ? { status }
             : { status: { $in: ['pending', 'verified', 'rejected'] } };
@@ -220,12 +229,12 @@ exports.listKyc = async (req, res) => {
                 .populate('user', 'name email')
                 .select('-__v')
                 .sort({ submittedAt: -1 })
-                .skip((page - 1) * limit)
-                .limit(Number(limit)),
+                .skip((pageNum - 1) * limitNum)
+                .limit(limitNum),
             Kyc.countDocuments(filter),
         ]);
 
-        return res.json({ success: true, total, page: Number(page), data: kycs });
+        return res.json({ success: true, total, page: pageNum, data: kycs });
     } catch (err) {
         return res.status(500).json({ success: false, message: 'Server error', error: err.message });
     }

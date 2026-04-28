@@ -1,6 +1,7 @@
 // models/Kyc.js
 const mongoose = require('mongoose');
 
+
 const kycSchema = new mongoose.Schema(
     {
         user: {
@@ -24,10 +25,11 @@ const kycSchema = new mongoose.Schema(
 
         // ── ຮູບພາບ (Cloudinary URLs) ──────────────────────────────────────────
         idFrontUrl:     { type: String, required: true },
+        selfieUrl:   { type: String, default: null }, 
 
         // ── Consent ───────────────────────────────────────────────────────────
         consentData:    { type: Boolean, required: true },
-        consentPdpa:    { type: Boolean, default: false },
+        consentPdpa: { type: Boolean, required: true },
 
         // ── Status ────────────────────────────────────────────────────────────
         status: {
@@ -35,7 +37,7 @@ const kycSchema = new mongoose.Schema(
             enum: ['pending', 'verified', 'rejected'],
             default: 'pending',
         },
-        referenceId:    { type: String, required: true },
+        referenceId:    { type: String, required: true, unique: true },
         reviewNote:     { type: String, default: null },
         reviewedBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         reviewedAt:     { type: Date,   default: null },

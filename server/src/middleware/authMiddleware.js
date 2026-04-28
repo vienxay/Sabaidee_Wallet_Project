@@ -43,4 +43,12 @@ const adminOnly = (req, res, next) => {
     next();
 };
 
-module.exports = { protect, adminOnly };
+// ✅ ເພີ່ມ — staff + admin ເຂົ້າໄດ້
+const adminOrStaff = (req, res, next) => {
+    if (!['admin', 'staff'].includes(req.user?.role)) {
+        return res.status(403).json({ success: false, message: 'ບໍ່ມີສິດເຂົ້າເຖິງ' });
+    }
+    next();
+};
+
+module.exports = { protect, adminOnly, adminOrStaff }; // ✅ export ເພີ່ມ
