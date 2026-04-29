@@ -46,6 +46,7 @@ app.use(express.urlencoded({ extended: true }))
 app.use(passport.initialize())
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
+
 // ─── Rate Limiters ────────────────────────────────────────────────────────
 
 // ✅ General — 300 dev / 100 prod (ເພີ່ມຂຶ້ນ)
@@ -129,6 +130,7 @@ app.get('/open/kyc',  (req, res) => res.redirect('sabaidee://kyc'))
 app.get('/', (req, res) => {
     res.json({ success: true, message: 'Sabaidee Wallet API is running 🚀' })
 })
+
 
 // ─── 404 ──────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {

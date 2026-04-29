@@ -1,21 +1,9 @@
 // src/controllers/profileController.js
 const Profile = require('../models/Profile');
-const cloudinary = require('../config/cloudinary'); 
+const User    = require('../models/User'); // ✅ ເພີ່ມ
+const cloudinary = require('../config/cloudinary');
 const path    = require('path');
 const fs      = require('fs');
-
-const deleteOldAvatar = (profileImage) => {
-    if (!profileImage) return;
-    try {
-        const oldPath = path.join(__dirname, '../../', profileImage);
-        if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
-            console.log('🗑️  ລຶບຮູບເກົ່າ:', oldPath);
-        }
-    } catch (e) {
-        console.error('ລຶບຮູບເກົ່າບໍ່ໄດ້:', e.message);
-    }
-};
 
 // ─── GET /api/profile/me ──────────────────────────────────────────
 exports.getMyProfile = async (req, res) => {
@@ -64,7 +52,7 @@ exports.updateMyProfile = async (req, res) => {
         const profile = await Profile.findOneAndUpdate(
             { user: req.user.id },
             { $set: updateData },
-            { returnDocument: 'after', upsert: true, runValidators: true }  // ✅ แก้ deprecated warning
+            { returnDocument: 'after', upsert: true, runValidators: true }
         );
 
         res.status(200).json({ success: true, message: 'ອັບເດດຂໍ້ມູນສຳເລັດ', data: profile });
@@ -78,8 +66,6 @@ exports.updateMyProfile = async (req, res) => {
     }
 };
 
-
-
 // ─── POST /api/profile/avatar ─────────────────────────────────────
 exports.uploadAvatar = async (req, res) => {
     try {
@@ -89,15 +75,23 @@ exports.uploadAvatar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ກະລຸນາເລືອກຮູບ' });
         }
 
-        // ✅ Cloudinary ส่ง URL กลับมาใน req.file.path
+        // ✅ Cloudinary URL
         const imageUrl = req.file.path;
         console.log('☁️ [uploadAvatar] Cloudinary URL:', imageUrl);
 
-        const profile = await Profile.findOneAndUpdate(
-            { user: req.user.id },
-            { $set: { profileImage: imageUrl } },
-            { returnDocument: 'after', upsert: true }
-        );
+        // ✅ update ທັງ Profile ແລະ User ພ້ອມກັນ
+        const [profile] = await Promise.all([
+            Profile.findOneAndUpdate(
+                { user: req.user.id },
+                { $set: { profileImage: imageUrl } },
+                { returnDocument: 'after', upsert: true }
+            ),
+            User.findByIdAndUpdate(
+                req.user.id,
+                { profileImage: imageUrl },
+                { new: true }
+            ),
+        ]);
 
         res.status(200).json({
             success: true,
@@ -119,17 +113,20 @@ exports.deleteAvatar = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ບໍ່ມີຮູບທີ່ຈະລຶບ' });
         }
 
-        // ✅ ลบจาก Cloudinary ด้วย public_id
+        // ✅ ລຶບຈາກ Cloudinary
         const publicId = `avatars/avatar_${req.user.id}`;
         await cloudinary.uploader.destroy(publicId);
-        console.log('🗑️ ลบรูปจาก Cloudinary:', publicId);
+        console.log('🗑️ ລຶບຮູບຈາກ Cloudinary:', publicId);
 
-        profile.profileImage = null;
-        await profile.save();
+        // ✅ ລຶບທັງ Profile ແລະ User ພ້ອມກັນ
+        await Promise.all([
+            profile.updateOne({ profileImage: null }),
+            User.findByIdAndUpdate(req.user.id, { profileImage: null }),
+        ]);
 
         res.status(200).json({ success: true, message: 'ລຶບຮູບສຳເລັດ' });
     } catch (err) {
         console.error('deleteAvatar error:', err);
         res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດ Server' });
     }
-};
+}; 
