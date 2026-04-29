@@ -105,7 +105,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Your password has been reset successfully.\nPlease login with your new password.',
+              'ລະຫັດຜ່ານຂອງທ່ານຖືກ reset ສຳເລັດແລ້ວ.\nກະລຸນາເຂົ້າສູ່ລະບົບດ້ວຍລະຫັດຜ່ານໃໝ່.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -133,7 +133,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   elevation: 0,
                 ),
                 child: const Text(
-                  'Back to Login',
+                  'ກັບເຂົ້າສູ່ລະບົບ',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -152,6 +152,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
@@ -160,15 +161,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
-          // ✅ Form widget
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ✅ Theme
               Text(
                 'Reset Password',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -177,7 +176,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Your new password must be different\nfrom your previous password',
+                'ລະຫັດຜ່ານໃໝ່ຕ້ອງແຕກຕ່າງ\nຈາກລະຫັດຜ່ານເກົ່າຂອງທ່ານ',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                   height: 1.5,
@@ -189,7 +188,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 hintText: 'New Password',
                 prefixIcon: Icons.lock_outline,
                 isPassword: true,
-                // ✅ validator
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'ກະລຸນາໃສ່ລະຫັດຜ່ານໃໝ່';
                   if (v.length < 6) return 'ລະຫັດຜ່ານຕ້ອງມີຢ່າງໜ້ອຍ 6 ຕົວ';
@@ -202,7 +200,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 hintText: 'Confirm Password',
                 prefixIcon: Icons.lock_outline,
                 isPassword: true,
-                // ✅ validator ກວດ match
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'ກະລຸນາຢືນຢັນລະຫັດຜ່ານ';
                   if (v != _newPasswordController.text) {
@@ -215,8 +212,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               CustomButton(
                 text: 'Reset Password',
                 isLoading: _isLoading,
+                backgroundColor: AppColors.primary,
                 onPressed: _isLoading ? null : _resetPassword,
               ),
+              SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
             ],
           ),
         ),

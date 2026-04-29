@@ -77,11 +77,9 @@ class _PaymentSuccessSheetState extends State<PaymentSuccessSheet>
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
     return Scaffold(
-      // ເພີ່ມ Scaffold
-      backgroundColor: AppColors.background, // ຕັ້ງສີພື້ນຫລັງ
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // ✅ ເນື້ອໃນ scroll ໄດ້
           Expanded(
             child: SingleChildScrollView(
               child: Container(
@@ -136,10 +134,12 @@ class _PaymentSuccessSheetState extends State<PaymentSuccessSheet>
                       ),
                       child: Column(
                         children: [
+                          // ✅ sender → Icons.person
                           _buildPartyRow(
                             'ຈາກ',
                             widget.senderName,
                             widget.senderAvatarUrl,
+                            defaultIcon: Icons.person,
                           ),
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
@@ -148,10 +148,12 @@ class _PaymentSuccessSheetState extends State<PaymentSuccessSheet>
                               thickness: 1,
                             ),
                           ),
+                          // ✅ receiver → Icons.store
                           _buildPartyRow(
                             'ຫາ',
                             widget.receiverName,
                             widget.receiverAvatarUrl,
+                            defaultIcon: Icons.store_mall_directory_outlined,
                           ),
                           const SizedBox(height: 20),
                           _buildDetailRow(
@@ -183,7 +185,7 @@ class _PaymentSuccessSheetState extends State<PaymentSuccessSheet>
             ),
           ),
 
-          // ✅ ປຸ່ມຢູ່ລຸ່ມສຸດສະເໝີ
+          // ✅ ປຸ່ມລຸ່ມສຸດ
           Padding(
             padding: EdgeInsets.fromLTRB(
               24,
@@ -215,7 +217,13 @@ class _PaymentSuccessSheetState extends State<PaymentSuccessSheet>
     );
   }
 
-  Widget _buildPartyRow(String label, String name, String? url) {
+  // ✅ ເພີ່ມ defaultIcon parameter — sender/receiver ໃຊ້ icon ຕ່າງກັນ
+  Widget _buildPartyRow(
+    String label,
+    String name,
+    String? url, {
+    IconData defaultIcon = Icons.person,
+  }) {
     return Row(
       children: [
         CircleAvatar(
@@ -223,7 +231,7 @@ class _PaymentSuccessSheetState extends State<PaymentSuccessSheet>
           backgroundColor: AppColors.primaryLight,
           backgroundImage: url != null ? NetworkImage(url) : null,
           child: url == null
-              ? const Icon(Icons.person, color: AppColors.primary)
+              ? Icon(defaultIcon, color: AppColors.primary)
               : null,
         ),
         const SizedBox(width: 12),

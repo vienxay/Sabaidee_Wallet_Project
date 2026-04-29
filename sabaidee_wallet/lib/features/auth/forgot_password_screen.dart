@@ -102,8 +102,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Enter your account email address to receive\n'
-                'the 6 digit code to reset your password',
+                'ປ້ອນອີເມວບັນຊີຂອງທ່ານເພື່ອຮັບ\n'
+                'ລະຫັດ 6 ຕົວເລກສຳລັບຕັ້ງລະຫັດຜ່ານໃໝ່',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
                   height: 1.5,
@@ -132,6 +132,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               CustomButton(
                 text: 'ສົ່ງ',
                 isLoading: _isLoading,
+                backgroundColor: AppColors.primary,
                 onPressed: _isLoading ? null : _sendOtp,
               ),
             ],

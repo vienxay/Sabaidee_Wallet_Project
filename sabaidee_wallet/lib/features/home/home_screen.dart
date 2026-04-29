@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final results = await Future.wait([
       AuthService.instance.getMe(),
-      WalletService.instance.getBalance(), // ✅ ປ່ຽນຈາກ getWallet → getBalance
+      WalletService.instance.getBalance(),
       TransactionService.instance.getTransactions(limit: 5),
     ]);
 
@@ -150,8 +150,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ─── Content ──────────────────────────────────────────────────────────────
   Widget _buildContent() {
-    // ✅ ເພີ່ມ filter ນີ້
-    final successTx = _recentTx.where((tx) => tx.status == 'success').toList();
+    final now = DateTime.now();
+    final successTx = _recentTx
+        .where(
+          (tx) =>
+              tx.status == 'success' &&
+              now.difference(tx.createdAt).inHours < 24,
+        )
+        .toList();
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -173,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 24),
 
-          // ✅ ສະແດງສະເພາະ success transaction
+          // ✅ ສະແດງສະເພາະເມື່ອມີ transaction ສຳເລັດ
           if (successTx.isNotEmpty)
             HomeRecentTx(tx: successTx.first)
           else
@@ -187,42 +193,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ─── Empty State ──────────────────────────────────────────────────────────
   Widget _buildEmptyTx() => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: const Column(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 40,
-            color: AppColors.textGrey,
-          ),
-          SizedBox(height: 8),
-          Text(
-            'ຍັງບໍ່ມີທຸລະກຳ',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textGrey,
+          // ✅ Icon ໃສ່ວົງມົນສີ primary
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.receipt_long_outlined,
+              size: 30,
+              color: AppColors.primary,
             ),
           ),
-          SizedBox(height: 4),
-          Text(
-            'TopUp ເພື່ອເລີ່ມໃຊ້ງານ',
-            style: TextStyle(fontSize: 12, color: AppColors.textGrey),
+          const SizedBox(height: 10),
+          const Text(
+            'ຍັງບໍ່ມີທຸລະກຳ',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
           ),
         ],
       ),
@@ -256,7 +268,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final qrType = detectQRType(result);
 
     if (qrType == QRType.laoQR) {
-      // ✅ LAO QR → ໄປໜ້າ TransferScreen ແທນ LaoQRPaySheet
       final qrInfo = LaoQRInfo.fromRaw(result);
       Navigator.push(
         context,
@@ -264,13 +275,13 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (_) => TransferScreen(
             senderName: _user?.name ?? 'Sabaidee Wallet',
             senderAccount: 'ສາບາຍດີ Wallet',
+            senderAvatarUrl: _user?.profileImage,
             receiverName: qrInfo.merchantName,
             receiverAccount: qrInfo.bank,
           ),
         ),
       );
     } else {
-      // ⚡ Lightning → ໃຊ້ SendSheet ຄືເດີມ
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,

@@ -15,7 +15,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<TransactionModel> _txList = [];
   String? _error;
   String? _filter; // null = ທັງໝົດ
-  int _totalSats = 0;
 
   @override
   void initState() {
@@ -37,13 +36,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _loading = false;
       if (res.success) {
         _txList = res.data ?? [];
-        _totalSats =
-            _txList
-                .where((t) => t.isReceive && t.isSuccess)
-                .fold(0, (s, t) => s + t.amountSats) -
-            _txList
-                .where((t) => t.isSend && t.isSuccess)
-                .fold(0, (s, t) => s + t.amountSats);
       } else {
         _error = res.message;
       }
@@ -90,24 +82,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
       body: Column(
         children: [
-          // ─── Summary ──────────────────────────────────────────────────────────
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            color: AppColors.background,
-            child: Row(
-              children: [
-                Text(
-                  '$_totalSats Sats',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           // ─── Filter Chips ─────────────────────────────────────────────────────
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,

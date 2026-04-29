@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'kyc_gate_service.dart'; // ✅ import KycGateService
+import 'kyc_gate_service.dart';
+import 'storage_service.dart'; // ✅ ເພີ່ມ
 import '../models/kyc_status.dart';
 
 class DailyLimitService {
@@ -7,14 +9,39 @@ class DailyLimitService {
   static final instance = DailyLimitService._();
 
   // ✅ ວົງເງິນຕາມ KYC status
-  static const int limitUnverified = 2000000; // 2 ລ້ານ/ມື້ (ບໍ່ຜ່ານ KYC)
-  static const int limitVerified = 100000000; // 100 ລ້ານ/ມື້ (ຜ່ານ KYC)
+  static const int limitUnverified = 2000000; // 2 ລ້ານ/ມື້
+  static const int limitVerified = 100000000; // 100 ລ້ານ/ມື້
 
-  static const _keySpent = 'lao_qr_daily_spent';
-  static const _keyDate = 'lao_qr_daily_date';
+  // ✅ key ແຍກຕາມ userId — ແຕ່ລະ user ມີວົງເງິນຂອງຕົນເອງ
+  Future<String> _keySpent() async {
+    final userId = await _getUserId();
+    return 'lao_qr_daily_spent_$userId';
+  }
 
-  // ✅ ດຶງ limit ຕາມ KYC status ປັດຈຸບັນ
-  // ✅ ໃໝ່ — ໃຊ້ getStatus() ທີ່ມີຢູ່ແລ້ວ
+  Future<String> _keyDate() async {
+    final userId = await _getUserId();
+    return 'lao_qr_daily_date_$userId';
+  }
+
+  // ✅ ດຶງ userId ຈາກ JWT token
+  Future<String> _getUserId() async {
+    try {
+      final token = await StorageService.instance.getToken();
+      if (token == null) return 'guest';
+
+      final parts = token.split('.');
+      if (parts.length != 3) return 'guest';
+
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      return payload['id'] as String? ?? 'guest';
+    } catch (_) {
+      return 'guest';
+    }
+  }
+
+  // ✅ ດຶງ limit ຕາມ KYC status
   Future<int> getDailyLimit() async {
     final status = await KycGateService.instance.getStatus();
     return status.isVerified ? limitVerified : limitUnverified;
@@ -22,35 +49,27 @@ class DailyLimitService {
 
   Future<int> getTodaySpent() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedDate = prefs.getString(_keyDate) ?? '';
+    final keySpent = await _keySpent();
+    final keyDate = await _keyDate();
+    final savedDate = prefs.getString(keyDate) ?? '';
     final today = _todayStr();
 
+    // ✅ ຂຶ້ນວັນໃໝ່ → reset ວົງເງິນ
     if (savedDate != today) {
-      await prefs.setString(_keyDate, today);
-      await prefs.setInt(_keySpent, 0);
+      await prefs.setString(keyDate, today);
+      await prefs.setInt(keySpent, 0);
       return 0;
     }
-
-    return prefs.getInt(_keySpent) ?? 0;
+    return prefs.getInt(keySpent) ?? 0;
   }
 
   Future<LimitCheckResult> canPay(int amountLAK) async {
     final spent = await getTodaySpent();
-    final limit = await getDailyLimit(); // ✅ ດຶງ dynamic limit
+    final limit = await getDailyLimit();
     final remaining = limit - spent;
 
-    if (amountLAK > remaining) {
-      return LimitCheckResult(
-        allowed: false,
-        todaySpent: spent,
-        remaining: remaining,
-        requested: amountLAK,
-        dailyLimit: limit, // ✅ ສົ່ງ limit ທີ່ໃຊ້ຈິງ
-      );
-    }
-
     return LimitCheckResult(
-      allowed: true,
+      allowed: amountLAK <= remaining,
       todaySpent: spent,
       remaining: remaining,
       requested: amountLAK,
@@ -60,10 +79,13 @@ class DailyLimitService {
 
   Future<void> recordPayment(int amountLAK) async {
     final prefs = await SharedPreferences.getInstance();
+    final keySpent = await _keySpent();
+    final keyDate = await _keyDate();
     final today = _todayStr();
-    await prefs.setString(_keyDate, today);
-    final current = prefs.getInt(_keySpent) ?? 0;
-    await prefs.setInt(_keySpent, current + amountLAK);
+
+    await prefs.setString(keyDate, today);
+    final current = prefs.getInt(keySpent) ?? 0;
+    await prefs.setInt(keySpent, current + amountLAK);
   }
 
   String _todayStr() {
@@ -78,26 +100,24 @@ class LimitCheckResult {
   final int todaySpent;
   final int remaining;
   final int requested;
-  final int dailyLimit; // ✅ ໃໝ່
+  final int dailyLimit;
 
   const LimitCheckResult({
     required this.allowed,
     required this.todaySpent,
     required this.remaining,
     required this.requested,
-    required this.dailyLimit, // ✅ ໃໝ່
+    required this.dailyLimit,
   });
 
   int get exceeded => requested - remaining;
 
   String get remainingFormatted => _fmt(remaining);
   String get todaySpentFormatted => _fmt(todaySpent);
-  String get limitFormatted => _fmt(dailyLimit); // ✅ dynamic
+  String get limitFormatted => _fmt(dailyLimit);
 
-  static String _fmt(int n) {
-    return n.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    );
-  }
+  static String _fmt(int n) => n.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
 }

@@ -197,14 +197,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           children: [
             Text(
               // ✅ Theme
-              'OTP Verification',
+              'ຢືນຢັນລະຫັດ OTP',
               style: Theme.of(
                 context,
               ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Text(
-              'Enter the 6 digit code sent to\n$_email',
+              'ປ້ອນລະຫັດ 6 ຕົວເລກທີ່ສົ່ງໄປຫາ\n$_email',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.textSecondary,
                 height: 1.5,
@@ -217,8 +217,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             ),
             const SizedBox(height: 32),
             CustomButton(
-              text: 'Verify',
+              text: 'ຢືນຢັນ',
               isLoading: _isLoading,
+              backgroundColor: AppColors.primary,
               onPressed: _isLoading ? null : _verifyOtp,
             ),
             const SizedBox(height: 24),

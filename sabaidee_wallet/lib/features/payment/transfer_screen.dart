@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'transfer_confirm_screen.dart';
+import 'payment_error_dialog.dart'; // ✅ ເພີ່ມ
+import '../kyc/kyc_screen.dart'; // ✅ ເພີ່ມ
 import '../../services/daily_limit_service.dart';
 
 class TransferScreen extends StatefulWidget {
@@ -51,7 +53,6 @@ class _TransferScreenState extends State<TransferScreen>
       begin: const Offset(0, 0.08),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
-
     _animCtrl.forward();
     _loadLimit();
   }
@@ -75,24 +76,55 @@ class _TransferScreenState extends State<TransferScreen>
     super.dispose();
   }
 
+  // ─── Format ───────────────────────────────────────────────────────────────
+  String _fmt(int n) => n.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
+
+  // ─── Next ─────────────────────────────────────────────────────────────────
   void _onNext() {
-    if (_formKey.currentState!.validate()) {
-      Navigator.push(
+    if (!_formKey.currentState!.validate()) return;
+
+    final amount = int.parse(_amountCtrl.text.replaceAll(',', ''));
+    final remaining = _dailyLimit - _todaySpent;
+
+    // ✅ ເກີນວົງເງິນ → ສະແດງ dialog ໄປ KYC
+    if (amount > remaining) {
+      PaymentErrorDialog.show(
         context,
-        MaterialPageRoute(
-          builder: (_) => TransferConfirmScreen(
-            senderName: widget.senderName,
-            senderAccount: widget.senderAccount,
-            senderAvatarUrl: widget.senderAvatarUrl,
-            receiverName: widget.receiverName,
-            receiverAccount: widget.receiverAccount,
-            receiverAvatarUrl: widget.receiverAvatarUrl,
-            amountLAK: int.parse(_amountCtrl.text.replaceAll(',', '')),
-            memo: _memoCtrl.text.trim(),
-          ),
+        errorInfo: PaymentErrorInfo(
+          type: PaymentErrorType.limitExceeded,
+          message:
+              'ເກີນວົງເງິນຕໍ່ມື້ (${_fmt(_dailyLimit)} ກີບ).\nກະລຸນາຢືນຢັນຕົວຕົນ (KYC) ເພື່ອຍກລະດັບວົງເງິນ',
+          requireKYC: true,
+        ),
+        onGoToKYC: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const KycScreen()),
         ),
       );
+      return;
     }
+
+    // ✅ ໄປ confirm + reload ວົງເງິນເມື່ອກັບ
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TransferConfirmScreen(
+          senderName: widget.senderName,
+          senderAccount: widget.senderAccount,
+          senderAvatarUrl: widget.senderAvatarUrl,
+          receiverName: widget.receiverName,
+          receiverAccount: widget.receiverAccount,
+          receiverAvatarUrl: widget.receiverAvatarUrl,
+          amountLAK: amount,
+          memo: _memoCtrl.text.trim(),
+        ),
+      ),
+    ).then((_) {
+      if (mounted) _loadLimit(); // ✅ reload ວົງເງິນຕາມຈິງ
+    });
   }
 
   @override
@@ -226,11 +258,6 @@ class _TransferScreenState extends State<TransferScreen>
     final progress = (_todaySpent / _dailyLimit).clamp(0.0, 1.0);
     final isNear = progress >= 0.8;
 
-    String fmt(int n) => n.toString().replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -245,7 +272,7 @@ class _TransferScreenState extends State<TransferScreen>
               text: TextSpan(
                 children: [
                   TextSpan(
-                    text: fmt(remaining),
+                    text: _fmt(remaining),
                     style: TextStyle(
                       color: isNear
                           ? const Color(0xFFEF4444)
@@ -255,7 +282,7 @@ class _TransferScreenState extends State<TransferScreen>
                     ),
                   ),
                   TextSpan(
-                    text: ' / ${fmt(_dailyLimit)} ກີບ',
+                    text: ' / ${_fmt(_dailyLimit)} ກີບ',
                     style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                 ],
