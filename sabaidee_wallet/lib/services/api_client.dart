@@ -83,9 +83,9 @@ class ApiClient {
             headers: await _headers(auth: auth),
             body: jsonEncode(body),
           )
-          .timeout(_connectTimeout); // ✅ timeout
+          .timeout(_connectTimeout);
 
-      return _handleResponse(response);
+      return _handleResponse(response, auth: auth); // ✅ ສົ່ງ auth
     } on TimeoutException {
       return ApiResponse(
         success: false,
@@ -159,9 +159,9 @@ class ApiClient {
   }
 
   // ─── Handle Response ──────────────────────────────────────────────
-  ApiResponse _handleResponse(http.Response response) {
-    // ✅ 401 → clear session
-    if (response.statusCode == 401) {
+  ApiResponse _handleResponse(http.Response response, {bool auth = true}) {
+    // ✅ clear storage ສະເພາະຕອນ authenticated request ເທົ່ານັ້ນ
+    if (response.statusCode == 401 && auth) {
       StorageService.instance.clearAll();
       return ApiResponse(
         success: false,

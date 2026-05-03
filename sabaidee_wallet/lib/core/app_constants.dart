@@ -75,4 +75,12 @@ class AppConstants {
   static const String withdrawalLimitStatus = '/api/withdrawal/limit-status';
   static const String withdrawalPreview = '/api/withdrawal/preview';
   static const String withdrawalSend = '/api/withdrawal/send';
+
+  // Admin
+  static const adminKyc = '/api/admin/kyc';
+  static const adminKycReview = '/api/admin/kyc/review';
+  static const adminUsers = '/api/admin/users';
+  static const adminUpdateRole = '/api/admin/users/role';
+  static const adminRate = '/api/admin/rate';
+  static const adminUpdateRate = '/api/admin/rate/update';
 }

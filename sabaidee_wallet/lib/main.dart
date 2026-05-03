@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'features/admin/admin_screen.dart';
 import 'features/auth/forgot_password_screen.dart';
 import 'features/auth/google_callback_screen.dart';
 import 'features/auth/login_screen.dart';
@@ -35,6 +36,7 @@ void main() async {
   );
 
   var isLoggedIn = false;
+  var isAdmin = false;
 
   try {
     // ✅ ແກ້ 3s → 10s
@@ -47,18 +49,25 @@ void main() async {
 
     if (isLoggedIn) {
       KycGateService.instance.syncFromBackend();
+      final user = await AuthService.instance.getMe(); // Admin
+      isAdmin = user?.isAdmin ?? false;
     }
   } catch (e) {
     debugPrint('Initialization error: $e');
     isLoggedIn = false;
   }
 
-  runApp(SabaideeWallet(isLoggedIn: isLoggedIn));
+  runApp(SabaideeWallet(isLoggedIn: isLoggedIn, isAdmin: isAdmin));
 }
 
 class SabaideeWallet extends StatefulWidget {
   final bool isLoggedIn;
-  const SabaideeWallet({super.key, required this.isLoggedIn});
+  final bool isAdmin;
+  const SabaideeWallet({
+    super.key,
+    required this.isLoggedIn,
+    this.isAdmin = false,
+  });
 
   @override
   State<SabaideeWallet> createState() => _SabaideeWalletState();
@@ -158,6 +167,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
         '/home': (_) => const HomeScreen(),
         '/profile': (_) => const ProfileScreen(),
         '/kyc': (_) => const KycScreen(),
+        '/admin': (_) => const AdminScreen(), // Admin
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
       },
       onUnknownRoute: (settings) =>

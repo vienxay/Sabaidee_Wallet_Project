@@ -12,6 +12,7 @@ class UserModel {
   final String? gender; // ເພດ
   final String? profileImage;
   final String kycStatus;
+  final String role;
   final DateTime? createdAt;
 
   const UserModel({
@@ -24,6 +25,7 @@ class UserModel {
     this.gender,
     this.profileImage,
     required this.kycStatus,
+    required this.role,
     this.createdAt,
   });
 
@@ -37,6 +39,7 @@ class UserModel {
     gender: j['gender'] as String?,
     profileImage: j['profileImage']?.toString(),
     kycStatus: j['kycStatus'] as String? ?? 'pending',
+    role: j['role'] as String? ?? 'user',
     createdAt: j['createdAt'] != null
         ? DateTime.tryParse(j['createdAt'])
         : null,
@@ -52,9 +55,12 @@ class UserModel {
     'gender': gender,
     'profileImage': profileImage,
     'kycStatus': kycStatus,
+    'role': role,
   };
 
   bool get isKYCVerified => kycStatus == 'verified';
+  bool get isAdmin => role == 'admin';
+  bool get isStaff => role == 'staff';
 }
 
 // ─── Wallet Model ─────────────────────────────────────────────────────────────

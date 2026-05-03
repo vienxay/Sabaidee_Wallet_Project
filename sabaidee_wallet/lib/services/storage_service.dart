@@ -106,6 +106,10 @@ class StorageService {
   // ── Clear All ─────────────────────────────────────────────────────────────
   Future<void> clearAll() async {
     // ✅ ລໍຖ້າທັງສອງຢ່າງໃຫ້ສຳເລັດແບບ Parallel
+    // ✅ ເພີ່ມຊົ່ວຄາວ — ຫາຕົ້ນຕໍ
+    debugPrint('⚠️ clearAll() called from:');
+    debugPrintStack(label: 'clearAll stack');
+
     await Future.wait([clearToken(), clearUser()]);
     debugPrint('🧹 All storage cleared');
   }

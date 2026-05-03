@@ -47,12 +47,18 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await AuthService.instance.login(
+      final result = await AuthService.instance.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
       if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+
+      // ✅ ກວດ role ກ່ອນ redirect
+      if (result.user?.isAdmin == true) {
+        Navigator.pushNamedAndRemoveUntil(context, '/admin', (_) => false);
+      } else {
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (_) => false);
+      }
     } catch (e) {
       if (!mounted) return;
       _showError(e.toString().replaceAll('Exception: ', ''));
