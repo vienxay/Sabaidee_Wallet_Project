@@ -1,83 +1,86 @@
 const axios = require('axios');
+const Rate  = require('../models/Rate');
 
-// ─── Cache (ປ້ອງກັນຮ້ອງ API ຫຼາຍເກີນ) ────────────────────────────────────────
 let cache = {
-    btcToUSD: 0,
-    usdToLAK: 0,
-    btcToLAK: 0,
+    btcToUSD : 0,
+    usdToLAK : 0,
+    btcToLAK : 0,
     fetchedAt: null,
 };
 
-const CACHE_TTL_MS = 60 * 1000; // 1 ນາທີ
+const CACHE_TTL_MS = 60 * 1000;
 
 const isCacheValid = () =>
     cache.fetchedAt && Date.now() - cache.fetchedAt < CACHE_TTL_MS;
 
-// ─── ດຶງ BTC/USD ຈາກ CoinGecko (free, no API key) ────────────────────────────
 const fetchBTCtoUSD = async () => {
-    const response = await axios.get(
-        'https://api.coingecko.com/api/v3/simple/price',
-        {
-            params: { ids: 'bitcoin', vs_currencies: 'usd' },
-            timeout: 8000,
-        }
-    );
-    return response.data.bitcoin.usd;
-};
-
-// ─── ດຶງ USD/LAK ຈາກ exchangerate-api ────────────────────────────────────────
-const fetchUSDtoLAK = async () => {
-    const response = await axios.get(
-        `https://open.er-api.com/v6/latest/USD`,
-        { timeout: 8000 }
-    );
-    return response.data.rates.LAK || 20900; // fallback rate
-};
-
-// ─── getExchangeRate (ສົ່ງ rates ທັງໝົດ) ─────────────────────────────────────
-exports.getExchangeRate = async () => {
-    if (isCacheValid()) {
-        return { ...cache };
+    try {
+        // ✅ ລອງ Binance ກ່ອນ
+        const { data } = await axios.get(
+            'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
+            { timeout: 8000 }
+        );
+        return parseFloat(data.price);
+    } catch {
+        // ✅ fallback CoinGecko
+        const { data } = await axios.get(
+            'https://api.coingecko.com/api/v3/simple/price',
+            { params: { ids: 'bitcoin', vs_currencies: 'usd' }, timeout: 8000 }
+        );
+        return data.bitcoin.usd;
     }
+};
+
+exports.getExchangeRate = async () => {
+    if (isCacheValid()) return { ...cache };
 
     try {
-        const [btcToUSD, usdToLAK] = await Promise.all([
-            fetchBTCtoUSD(),
-            fetchUSDtoLAK(),
-        ]);
+        // ✅ ດຶງ usdToLAK ຈາກ DB ທີ່ admin ຕັ້ງ
+        const rateDoc  = await Rate.findOne();
+        const usdToLAK = rateDoc?.usdToLAK || 21000;
+
+        // ✅ ດຶງ BTC/USD real-time
+        let btcToUSD = cache.btcToUSD || 0;
+        try {
+            btcToUSD = await fetchBTCtoUSD();
+        } catch {
+            console.warn('⚠️ CoinGecko failed — ໃຊ້ cache');
+        }
+
+        const btcToLAK = Math.round(btcToUSD * usdToLAK);
 
         cache = {
             btcToUSD,
             usdToLAK,
-            btcToLAK: btcToUSD * usdToLAK,
+            btcToLAK,
             fetchedAt: new Date(),
         };
 
-        console.log(`💱 Rate updated: 1 BTC = $${btcToUSD} = ${(btcToUSD * usdToLAK).toLocaleString()} LAK`);
+        console.log(`💱 Rate: $${btcToUSD} | 1USD=${usdToLAK}ກີບ | 1BTC=${btcToLAK.toLocaleString()}ກີບ`);
         return { ...cache };
+
     } catch (error) {
         console.error('Exchange Rate Error:', error.message);
-
-        // ຖ້າ cache ຍັງມີຢູ່ (ເຖິງ expire) ໃຊ້ cache ເກົ່າຕໍ່
         if (cache.fetchedAt) {
             console.warn('⚠️ ໃຊ້ cache ເກົ່າ:', cache.fetchedAt);
             return { ...cache };
         }
-
         throw new Error('ບໍ່ສາມາດດຶງອັດຕາແລກປ່ຽນໄດ້');
     }
 };
 
-// ─── convertSatsToLAK ──────────────────────────────────────────────────────
-exports.convertLAKToSats = async (lak) => {
-    const rate = await exports.getExchangeRate();
-    const btc = lak / rate.btcToLAK;
-    return Math.round(btc * 100_000_000); // BTC → sats
+// ✅ clear cache — call ຫຼັງ admin update rate
+exports.clearCache = () => {
+    cache.fetchedAt = null;
+    console.log('🔄 Rate cache cleared');
 };
 
-// ─── convertLAKtoSats ──────────────────────────────────────────────────────
 exports.convertSatsToLAK = async (sats) => {
     const rate = await exports.getExchangeRate();
-    const btc = sats / 100_000_000; // sats → BTC
-    return Math.round(btc * rate.btcToLAK);
+    return Math.round((sats / 100_000_000) * rate.btcToLAK);
+};
+
+exports.convertLAKToSats = async (lak) => {
+    const rate = await exports.getExchangeRate();
+    return Math.round((lak / rate.btcToLAK) * 100_000_000);
 };

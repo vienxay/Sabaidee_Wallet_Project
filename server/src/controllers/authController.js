@@ -4,6 +4,8 @@ const Wallet = require('../models/Wallet');
 const lnbits = require('../services/lnbitsService');
 const { cloudinary } = require('../services/cloudinaryService');
 
+
+
 const generateToken = (id) =>
     jwt.sign({ id }, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -105,19 +107,21 @@ exports.getMe = async (req, res) => {
         res.status(200).json({
             success: true,
             user: {
-                id: user._id, name: user.name, email: user.email,
-                profileImage: user.profileImage, // ✅
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                profileImage: user.profileImage,
                 kycStatus: user.kycStatus,
+                role: user.role, // ✅ ເພີ່ມ
                 wallet: user.wallet,
                 createdAt: user.createdAt,
-                
             },
         });
     } catch (error) {
         console.error('Get Me Error:', error);
         return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
     }
-};
+}
 
 // ─── PUT /api/auth/profile ────────────────────────────────────────────────────
 exports.updateProfile = async (req, res) => {

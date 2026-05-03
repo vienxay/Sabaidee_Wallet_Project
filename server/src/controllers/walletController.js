@@ -2,6 +2,7 @@ const Wallet      = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const lnbits      = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
+const Rate = require('../models/Rate'); 
 
 // ════════════════════════════════════════════════════════════════════════════
 // GET /api/wallet
@@ -77,14 +78,15 @@ exports.getBalance = async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════
 exports.getRate = async (req, res) => {
     try {
-        const rate = await exchangeRate.getExchangeRate();
+        // ✅ ດຶງຈາກ DB ດຽວກັບ admin — rate ຕົງກັນ 100%
+        const rateDoc = await Rate.findOne();
         res.status(200).json({
             success: true,
             rate: {
-                btcToUSD:  rate.btcToUSD,
-                btcToLAK:  rate.btcToLAK,
-                usdToLAK:  rate.usdToLAK,
-                updatedAt: rate.fetchedAt,
+                btcToUSD  : rateDoc?.btcToUSD  || 0,
+                btcToLAK  : rateDoc?.btcToLAK  || 0,
+                usdToLAK  : rateDoc?.usdToLAK  || 0,
+                updatedAt : rateDoc?.updatedAt  || null,
             },
         });
     } catch (error) {
