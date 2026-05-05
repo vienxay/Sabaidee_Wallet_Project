@@ -7,7 +7,8 @@ const Rate        = require('../models/Rate');
 const Kyc         = require('../models/Kyc');
 const axios       = require('axios');
 const { protect } = require('../middleware/authMiddleware');
-const exchangeRate = require('../services/exchangeRateService'); // ✅ ເພີ່ມ
+const exchangeRate = require('../services/exchangeRateService'); 
+const Expense = require('../models/Expense')
 
 // ── Middleware ───────────────────────────────────────────────────────────
 const adminOnly = (req, res, next) => {
@@ -96,11 +97,11 @@ router.post('/create-staff', protect, adminOnly, async (req, res) => {
 router.put('/users/:id/role', protect, adminOnly, async (req, res) => {
     try {
         const { role } = req.body;
-        if (!['user', 'admin'].includes(role))
+        if (!['user', 'staff', 'admin'].includes(role))  // ✅ ເພີ່ມ staff
             return res.status(400).json({ success: false, message: 'Role ບໍ່ຖືກຕ້ອງ' });
 
         const user = await User.findByIdAndUpdate(
-            req.params.id, { role }, { new: true }
+            req.params.id, { role }, { returnDocument: 'after' }
         ).select('-password');
         return res.json({ success: true, data: user });
     } catch (error) {
@@ -129,7 +130,7 @@ router.post('/users/role', protect, adminOnly, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Role ບໍ່ຖືກຕ້ອງ' });
 
         const user = await User.findByIdAndUpdate(
-            userId, { role }, { new: true }
+            userId, { role }, { returnDocument: 'after' }
         ).select('-password');
         return res.json({ success: true, data: user });
     } catch (error) {
@@ -147,8 +148,12 @@ router.get('/stats', protect, adminOnly, async (req, res) => {
         ]);
         const wallets   = await Wallet.find({});
         const totalSats = wallets.reduce((sum, w) => sum + (w.balanceSats || 0), 0);
+        const totalLAK  = wallets.reduce((sum, w) => sum + (w.balanceLAK  || 0), 0); // ✅
 
-        return res.json({ success: true, data: { totalUsers, totalTx, pendingKyc, totalSats } });
+        return res.json({
+            success: true,
+            data: { totalUsers, totalTx, pendingKyc, totalSats, totalLAK }, // ✅
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
@@ -202,8 +207,26 @@ router.post('/kyc/review', protect, staffOrAdmin, async (req, res) => {
 // ── GET /api/admin/rate ──────────────────────────────────────────────────
 router.get('/rate', protect, staffOrAdmin, async (req, res) => {
     try {
-        const rate = await Rate.findOne();
-        return res.json({ success: true, rate });
+        const rateDoc      = await Rate.findOne();
+        const spread       = rateDoc?.spreadPercent || 0;
+        const usdToLAKBase = rateDoc?.usdToLAK      || 0;
+        const btcToUSD     = rateDoc?.btcToUSD       || 0;
+
+        // ✅ ຄຳນວນລາຄາຂາຍລວມ spread
+        const usdToLAK = Math.round(usdToLAKBase * (1 + spread / 100));
+        const btcToLAK = Math.round(btcToUSD * usdToLAK);
+
+        return res.json({
+            success: true,
+            rate: {
+                usdToLAK,                    // ✅ ລາຄາຂາຍ (ລວມ spread)
+                usdToLAKBase,               // ✅ base rate
+                spreadPercent : spread,
+                btcToUSD,
+                btcToLAK,                   // ✅ ລວມ spread
+                updatedAt     : rateDoc?.updatedAt,
+            },
+        });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
@@ -212,16 +235,22 @@ router.get('/rate', protect, staffOrAdmin, async (req, res) => {
 // ── POST /api/admin/rate/update ──────────────────────────────────────────
 router.post('/rate/update', protect, adminOnly, async (req, res) => {
     try {
-        const { usdToLAK } = req.body;
+        const { usdToLAK, spreadPercent } = req.body; // ✅ ຮັບທັງ 2
+
         if (!usdToLAK || usdToLAK <= 0)
-            return res.status(400).json({ success: false, message: 'ໃສ່ຕົວເລກທີ່ຖືກຕ້ອງ' });
+            return res.status(400).json({ success: false, message: 'ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ' });
 
-        const rounded = Math.round(usdToLAK);
+        if (spreadPercent === undefined || spreadPercent < 0)
+            return res.status(400).json({ success: false, message: 'ໃສ່ Spread % ທີ່ຖືກຕ້ອງ (0 ຂຶ້ນໄປ)' });
 
-        // ✅ ລອງ 3 API ຕາມລຳດັບ
+        const rounded      = Math.round(usdToLAK);
+        const spread       = parseFloat(spreadPercent) || 0;
+        // ✅ ຄຳນວນລາຄາຂາຍລວມ spread
+        const usdToLAKSell = Math.round(rounded * (1 + spread / 100));
+
+        // ✅ ດຶງ BTC/USD
         let btcToUSD = 0;
         try {
-            // ລອງ Binance ກ່ອນ (ບໍ່ມີ rate limit)
             const { data } = await axios.get(
                 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
                 { timeout: 5000 }
@@ -230,7 +259,6 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
             console.log('✅ Binance BTC:', btcToUSD);
         } catch {
             try {
-                // ລອງ CoinGecko
                 const { data } = await axios.get(
                     'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
                     { timeout: 5000 }
@@ -238,28 +266,296 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
                 btcToUSD = data?.bitcoin?.usd ?? 0;
                 console.log('✅ CoinGecko BTC:', btcToUSD);
             } catch {
-                // ໃຊ້ຄ່າເກົ່າຈາກ DB
                 const existing = await Rate.findOne();
                 btcToUSD = existing?.btcToUSD ?? 0;
                 console.log('⚠️ ໃຊ້ btcToUSD ເກົ່າ:', btcToUSD);
             }
         }
 
-        const btcToLAK = Math.round(btcToUSD * rounded);
+        // ✅ btcToLAK ໃຊ້ລາຄາຂາຍ (ລວມ spread)
+        const btcToLAK = Math.round(btcToUSD * usdToLAKSell);
 
         const rate = await Rate.findOneAndUpdate(
             {},
-            { usdToLAK: rounded, btcToUSD, btcToLAK },
+            {
+                usdToLAK      : rounded,       // ✅ base rate
+                spreadPercent : spread,         // ✅ spread %
+                btcToUSD,
+                btcToLAK,                      // ✅ ລວມ spread
+            },
             { returnDocument: 'after', upsert: true }
         );
 
         exchangeRate.clearCache();
 
-        console.log(`✅ Rate saved: 1USD=${rounded} | BTC=$${btcToUSD} | BTC=${btcToLAK.toLocaleString()}ກີບ`);
+        console.log(`✅ Rate: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD}`);
         return res.json({ success: true, message: 'ອັບເດດ Rate ສຳເລັດ', rate });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
     }
 });
 
-module.exports = router;
+// ── GET /api/admin/report ─────────────────────────────────────────────────
+router.get('/report', protect, staffOrAdmin, async (req, res) => {
+  try {
+    const { from, to, type } = req.query
+
+    const fromDate = from ? new Date(from) : new Date(new Date().setMonth(new Date().getMonth() - 6))
+    const toDate   = to   ? new Date(to)   : new Date()
+    toDate.setHours(23, 59, 59, 999)
+
+    // ── User Growth PerMonth ──────────────────────────────────────────────
+    const userGrowth = await User.aggregate([
+      { $match: { createdAt: { $gte: fromDate, $lte: toDate } } },
+      { $group: {
+        _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
+        count: { $sum: 1 }
+      }},
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ])
+
+    // ── Transactions ──────────────────────────────────────────────────────
+    const txMatch = {
+      createdAt: { $gte: fromDate, $lte: toDate },
+      status: 'success',
+      ...(type && type !== 'all' ? { type } : {}),
+    }
+
+    const txByMonth = await Transaction.aggregate([
+  { $match: txMatch },
+  { $group: {
+    _id: {
+      year:  { $year:  '$createdAt' },
+      month: { $month: '$createdAt' },
+      type:  '$type',
+    },
+    count:      { $sum: 1 },
+    totalSats:  { $sum: '$amountSats' },
+    totalLAK:   { $sum: '$amountLAK'  },
+  }},
+  { $sort: { '_id.year': 1, '_id.month': 1 } }
+])
+
+// ── Summary ───────────────────────────────────────────────────────────
+const summary = await Transaction.aggregate([
+  { $match: { createdAt: { $gte: fromDate, $lte: toDate }, status: 'success' } },
+  { $group: {
+    _id:        '$type',
+    count:      { $sum: 1 },
+    totalSats:  { $sum: '$amountSats' },
+    totalLAK:   { $sum: '$amountLAK'  },
+  }}
+])
+
+return res.json({ success: true, data: { userGrowth, txByMonth, summary } })
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ── GET /api/admin/report/profit ─────────────────────────────────────────
+router.get('/report/profit', protect, adminOnly, async (req, res) => {
+  try {
+    const { from, to } = req.query
+
+    const fromDate = from ? new Date(from) : new Date(new Date().setMonth(new Date().getMonth() - 6))
+    const toDate   = to   ? new Date(to)   : new Date()
+    toDate.setHours(23, 59, 59, 999)
+
+    const rate = await Rate.findOne()
+    const spreadPercent = rate?.spreadPercent || 0
+    const usdToLAKBase  = rate?.usdToLAK     || 0
+
+    // ── ກຳໄລຕໍ່ວັນ — ເພີ່ມ feeSats ──────────────────────────────────────────
+    const profitByDay = await Transaction.aggregate([
+    {
+        $match: {
+        createdAt: { $gte: fromDate, $lte: toDate },
+        status: 'success',
+        type: { $in: ['topup', 'payment', 'withdraw'] },
+        }
+    },
+    {
+        $group: {
+        _id: {
+            year:  { $year:  '$createdAt' },
+            month: { $month: '$createdAt' },
+            day:   { $dayOfMonth: '$createdAt' },
+            type:  '$type',
+        },
+        totalSats: { $sum: '$amountSats' },
+        totalLAK:  { $sum: '$amountLAK'  },
+        totalFeeSats: { $sum: '$feeSats' },  // ✅ ເພີ່ມ fee
+        count:     { $sum: 1 },
+        }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
+    ])
+
+    // ── ກຳໄລຕໍ່ເດືອນ ────────────────────────────────────────────────────────
+    const profitByMonth = await Transaction.aggregate([
+    {
+        $match: {
+        createdAt: { $gte: fromDate, $lte: toDate },
+        status: 'success',
+        }
+    },
+    {
+        $group: {
+        _id: {
+            year:  { $year:  '$createdAt' },
+            month: { $month: '$createdAt' },
+            type:  '$type',
+        },
+        totalSats:    { $sum: '$amountSats' },
+        totalLAK:     { $sum: '$amountLAK'  },
+        totalFeeSats: { $sum: '$feeSats'    },  // ✅ ເພີ່ມ fee
+        count:        { $sum: 1 },
+        }
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ])
+
+    // ── ຄຳນວນກຳໄລ ──────────────────────────────────────────────────────
+    const calcProfit = (totalLAK, type) => {
+      if (type === 'withdraw') return 0
+      return Math.round(totalLAK * (spreadPercent / (100 + spreadPercent)))
+    }
+
+    const profitDayResult = profitByDay.map(row => ({
+      ...row,
+      profitLAK: calcProfit(row.totalLAK, row._id.type),
+    }))
+
+    const profitMonthResult = profitByMonth.map(row => ({
+      ...row,
+      profitLAK: calcProfit(row.totalLAK, row._id.type),
+    }))
+
+    // ── ກຳໄລລວມ ─────────────────────────────────────────────────────────
+    const totalProfitLAK = profitMonthResult
+      .filter(r => r._id.type !== 'withdraw')
+      .reduce((s, r) => s + r.profitLAK, 0)
+
+    const totalVolumeLAK = profitMonthResult
+      .filter(r => r._id.type !== 'withdraw')
+      .reduce((s, r) => s + r.totalLAK, 0)
+
+    const totalWithdrawLAK = profitMonthResult
+      .filter(r => r._id.type === 'withdraw')
+      .reduce((s, r) => s + r.totalLAK, 0)
+
+    // ── ຄ່າໃຊ້ຈ່າຍ ──────────────────────────────────────────────────────
+    const expenses = await Expense.find({
+      $or: [
+        { year: { $gt: new Date(fromDate).getFullYear() } },
+        {
+          year:  new Date(fromDate).getFullYear(),
+          month: { $gte: new Date(fromDate).getMonth() + 1 }
+        }
+      ]
+    }).sort({ year: -1, month: -1 })
+
+    const totalExpenseLAK = expenses.reduce((s, e) => s + e.amount, 0)
+    const netProfitLAK    = totalProfitLAK - totalExpenseLAK  // ✅ ກຳໄລສຸດທິ
+
+    return res.json({
+      success: true,
+      data: {
+        spreadPercent,
+        usdToLAKBase,
+        totalProfitLAK,
+        totalVolumeLAK,
+        totalWithdrawLAK,
+        totalExpenseLAK,   // ✅
+        netProfitLAK,      // ✅
+        expenses,          // ✅
+        profitByDay:   profitDayResult,
+        profitByMonth: profitMonthResult,
+      }
+    })
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ── POST /api/admin/expenses ──────────────────────────────────────────────
+router.post('/expenses', protect, adminOnly, async (req, res) => {
+  try {
+    const { title, amount, category, month, year, note } = req.body
+    if (!title || !amount || !month || !year)
+      return res.status(400).json({ success: false, message: 'ຂໍ້ມູນບໍ່ຄົບ' })
+
+    const expense = await Expense.create({
+      title, amount, category, month, year, note,
+      createdBy: req.user._id,
+    })
+    return res.json({ success: true, data: expense })
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ── DELETE /api/admin/expenses/:id ───────────────────────────────────────
+router.delete('/expenses/:id', protect, adminOnly, async (req, res) => {
+  try {
+    await Expense.findByIdAndDelete(req.params.id)
+    return res.json({ success: true, message: 'ລຶບສຳເລັດ' })
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+// ── GET /api/admin/report/top-users ──────────────────────────────────────
+router.get('/report/top-users', protect, adminOnly, async (req, res) => {
+  try {
+    const { from, to, limit = 10 } = req.query
+    const fromDate = from ? new Date(from) : new Date(new Date().setMonth(new Date().getMonth() - 6))
+    const toDate   = to   ? new Date(to)   : new Date()
+    toDate.setHours(23, 59, 59, 999)
+
+    const topUsers = await Transaction.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: fromDate, $lte: toDate },
+          status: 'success',
+          type: 'topup',
+        }
+      },
+      {
+        $group: {
+          _id:       '$user',
+          totalSats: { $sum: '$amountSats' },
+          totalLAK:  { $sum: '$amountLAK'  },
+          count:     { $sum: 1 },
+        }
+      },
+      { $sort: { totalLAK: -1 } },
+      { $limit: parseInt(limit) },
+      {
+        $lookup: {
+          from:         'users',
+          localField:   '_id',
+          foreignField: '_id',
+          as:           'user',
+        }
+      },
+      { $unwind: '$user' },
+      {
+        $project: {
+          name:      '$user.name',
+          email:     '$user.email',
+          totalSats: 1,
+          totalLAK:  1,
+          count:     1,
+        }
+      }
+    ])
+
+    return res.json({ success: true, data: topUsers })
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message })
+  }
+})
+
+module.exports = router; 

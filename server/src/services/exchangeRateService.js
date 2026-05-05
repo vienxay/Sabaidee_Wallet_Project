@@ -2,10 +2,12 @@ const axios = require('axios');
 const Rate  = require('../models/Rate');
 
 let cache = {
-    btcToUSD : 0,
-    usdToLAK : 0,
-    btcToLAK : 0,
-    fetchedAt: null,
+    btcToUSD      : 0,
+    usdToLAK      : 0,      // ລາຄາຂາຍ (ລວມ spread)
+    usdToLAKBase  : 0,      // ລາຄາ admin ຕັ້ງ
+    spreadPercent : 0,
+    btcToLAK      : 0,
+    fetchedAt     : null,
 };
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -15,14 +17,12 @@ const isCacheValid = () =>
 
 const fetchBTCtoUSD = async () => {
     try {
-        // ✅ ລອງ Binance ກ່ອນ
         const { data } = await axios.get(
             'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
             { timeout: 8000 }
         );
         return parseFloat(data.price);
     } catch {
-        // ✅ fallback CoinGecko
         const { data } = await axios.get(
             'https://api.coingecko.com/api/v3/simple/price',
             { params: { ids: 'bitcoin', vs_currencies: 'usd' }, timeout: 8000 }
@@ -35,41 +35,41 @@ exports.getExchangeRate = async () => {
     if (isCacheValid()) return { ...cache };
 
     try {
-        // ✅ ດຶງ usdToLAK ຈາກ DB ທີ່ admin ຕັ້ງ
-        const rateDoc  = await Rate.findOne();
-        const usdToLAK = rateDoc?.usdToLAK || 21000;
+        const rateDoc     = await Rate.findOne();
+        const usdToLAKBase = rateDoc?.usdToLAK     || 21000;
+        const spread       = rateDoc?.spreadPercent || 0;
 
-        // ✅ ດຶງ BTC/USD real-time
+        // ✅ ຄຳນວນ spread
+        const usdToLAK = Math.round(usdToLAKBase * (1 + spread / 100));
+
         let btcToUSD = cache.btcToUSD || 0;
         try {
             btcToUSD = await fetchBTCtoUSD();
         } catch {
-            console.warn('⚠️ CoinGecko failed — ໃຊ້ cache');
+            console.warn('⚠️ BTC fetch failed — ໃຊ້ cache');
         }
 
         const btcToLAK = Math.round(btcToUSD * usdToLAK);
 
         cache = {
             btcToUSD,
-            usdToLAK,
+            usdToLAKBase,   // ✅ ລາຄາ admin ຕັ້ງ
+            usdToLAK,       // ✅ ລາຄາຂາຍ (ລວມ spread)
+            spreadPercent : spread,
             btcToLAK,
-            fetchedAt: new Date(),
+            fetchedAt     : new Date(),
         };
 
-        console.log(`💱 Rate: $${btcToUSD} | 1USD=${usdToLAK}ກີບ | 1BTC=${btcToLAK.toLocaleString()}ກີບ`);
+        console.log(`💱 Base: ${usdToLAKBase} | Spread: ${spread}% | ຂາຍ: ${usdToLAK} | BTC: $${btcToUSD}`);
         return { ...cache };
 
     } catch (error) {
         console.error('Exchange Rate Error:', error.message);
-        if (cache.fetchedAt) {
-            console.warn('⚠️ ໃຊ້ cache ເກົ່າ:', cache.fetchedAt);
-            return { ...cache };
-        }
+        if (cache.fetchedAt) return { ...cache };
         throw new Error('ບໍ່ສາມາດດຶງອັດຕາແລກປ່ຽນໄດ້');
     }
 };
 
-// ✅ clear cache — call ຫຼັງ admin update rate
 exports.clearCache = () => {
     cache.fetchedAt = null;
     console.log('🔄 Rate cache cleared');

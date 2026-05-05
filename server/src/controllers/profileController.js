@@ -89,7 +89,7 @@ exports.uploadAvatar = async (req, res) => {
             User.findByIdAndUpdate(
                 req.user.id,
                 { profileImage: imageUrl },
-                { new: true }
+                { returnDocument: 'after' }
             ),
         ]);
 

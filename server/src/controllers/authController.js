@@ -159,7 +159,7 @@ exports.updateProfileImage = async (req, res) => {
         const updated = await User.findByIdAndUpdate(
             req.user._id,
             { profileImage: imageUrl },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         res.status(200).json({
