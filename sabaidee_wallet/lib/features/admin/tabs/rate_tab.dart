@@ -12,7 +12,8 @@ class RateTab extends StatefulWidget {
 
 class _RateTabState extends State<RateTab> {
   final _api = ApiClient.instance;
-  final _usdController = TextEditingController(); // ✅ ປ່ຽນຊື່
+  final _usdController = TextEditingController();
+  final _spreadController = TextEditingController(); // ✅ ເພີ່ມ
   final _fmt = NumberFormat('#,##0', 'en_US');
   bool _loading = false;
   Map? _currentRate;
@@ -26,45 +27,72 @@ class _RateTabState extends State<RateTab> {
   @override
   void dispose() {
     _usdController.dispose();
+    _spreadController.dispose(); // ✅ ເພີ່ມ
     super.dispose();
   }
 
   Future<void> _fetch() async {
-    if (!mounted) return; // ✅ ເພີ່ມ
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final res = await _api.get(AppConstants.adminRate);
       if (res.success && res.data?['rate'] != null) {
-        if (!mounted) return; // ✅ ເພີ່ມ
+        if (!mounted) return;
         setState(() {
           _currentRate = res.data!['rate'];
-          _usdController.text = (_currentRate!['usdToLAK'] ?? 0).toString();
+          // ✅ ໃຊ້ usdToLAKBase ແທນ usdToLAK
+          _usdController.text =
+              (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0)
+                  .toString();
+          _spreadController.text = (_currentRate!['spreadPercent'] ?? 0)
+              .toString();
         });
       }
     } finally {
-      if (!mounted) return; // ✅ ເພີ່ມ
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
 
+  // ✅ ຄຳນວນ preview ລາຄາຂາຍ
+  String _previewSell() {
+    final base = double.tryParse(_usdController.text) ?? 0;
+    final spread = double.tryParse(_spreadController.text) ?? 0;
+    if (base <= 0) return '-';
+    final sell = (base * (1 + spread / 100)).round();
+    return '${_fmt.format(sell)} ກີບ';
+  }
+
   Future<void> _update() async {
-    final val = double.tryParse(_usdController.text);
-    if (val == null || val <= 0) {
+    final usdToLAK = double.tryParse(_usdController.text);
+    final spreadPercent = double.tryParse(_spreadController.text) ?? 0;
+
+    if (usdToLAK == null || usdToLAK <= 0) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('ໃສ່ຕົວເລກທີ່ຖືກຕ້ອງ')));
+      ).showSnackBar(const SnackBar(content: Text('ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ')));
+      return;
+    }
+    if (spreadPercent < 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Spread % ຕ້ອງ >= 0')));
       return;
     }
 
-    final res = await _api.post(
-      AppConstants.adminUpdateRate,
-      {'usdToLAK': val}, // ✅ ສົ່ງ usdToLAK
-    );
+    final res = await _api.post(AppConstants.adminUpdateRate, {
+      'usdToLAK': usdToLAK, // ✅ ສົ່ງທັງ 2
+      'spreadPercent': spreadPercent,
+    });
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(res.success ? '✅ ອັບເດດ Rate ສຳເລັດ' : res.message),
+        content: Text(
+          res.success
+              ? '✅ ອັບເດດ Rate ສຳເລັດ (spread $spreadPercent%)'
+              : res.message,
+        ),
         backgroundColor: res.success ? Colors.green : Colors.red,
       ),
     );
@@ -72,22 +100,15 @@ class _RateTabState extends State<RateTab> {
   }
 
   String _satToLAK() {
-    debugPrint(
-      'btcToLAK raw: ${_currentRate!['btcToLAK']} type: ${_currentRate!['btcToLAK'].runtimeType}',
-    );
     final btcToLAK = (_currentRate!['btcToLAK'] as num?)?.toDouble() ?? 0;
-    debugPrint('btcToLAK double: $btcToLAK');
     if (btcToLAK <= 0) return '-';
-    final sat = btcToLAK / 100000000;
-    return '${sat.toStringAsFixed(2)} ກີບ';
+    return '${(btcToLAK / 100000000).toStringAsFixed(2)} ກີບ';
   }
 
   String _kSats() {
-    // ✅ ຮອງຮັບທັງ int ແລະ double
     final btcToLAK = (_currentRate!['btcToLAK'] as num?)?.toDouble() ?? 0;
     if (btcToLAK <= 0) return '-';
-    final kSats = btcToLAK / 100000;
-    return '${_fmt.format(kSats.round())} ກີບ';
+    return '${_fmt.format((btcToLAK / 100000).round())} ກີບ';
   }
 
   @override
@@ -128,27 +149,79 @@ class _RateTabState extends State<RateTab> {
                     ),
                     _rateCard('BTC → LAK', _currentRate!['btcToLAK']),
                     _rateCard('USD → LAK', _currentRate!['usdToLAK']),
-                    // ✅ ຖືກ — ສົ່ງໄປ rawDisplay
                     _rateCard('1 sat = LAK', null, rawDisplay: _satToLAK()),
                     _rateCard('1,000 sats', null, rawDisplay: _kSats()),
                     const SizedBox(height: 24),
                   ],
 
+                  // ✅ Preview ລາຄາຂາຍ
+                  if (_currentRate != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.teal.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'ລາຄາຂາຍ (ລວມ spread)',
+                            style: TextStyle(color: Colors.grey, fontSize: 13),
+                          ),
+                          Text(
+                            _previewSell(),
+                            style: const TextStyle(
+                              color: Colors.teal,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // ✅ Input usdToLAK
                   const Text(
-                    'ແກ້ໄຂ USD → LAK',
+                    'Base Rate (USD → LAK)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _usdController,
                     keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}), // ✅ update preview
                     decoration: const InputDecoration(
                       labelText: '1 USD = ? LAK',
                       border: OutlineInputBorder(),
                       suffixText: 'ກີບ',
                     ),
                   ),
+                  const SizedBox(height: 12),
+
+                  // ✅ Input Spread %
+                  const Text(
+                    'Spread % (ກຳໄລ)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _spreadController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => setState(() {}), // ✅ update preview
+                    decoration: const InputDecoration(
+                      labelText: 'Spread %',
+                      hintText: '0 = ບໍ່ມີ spread',
+                      border: OutlineInputBorder(),
+                      suffixText: '%',
+                    ),
+                  ),
                   const SizedBox(height: 16),
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -169,7 +242,6 @@ class _RateTabState extends State<RateTab> {
           );
   }
 
-  // ✅ ເພີ່ມ parameter rawDisplay
   Widget _rateCard(
     String label,
     dynamic value, {
@@ -177,9 +249,8 @@ class _RateTabState extends State<RateTab> {
     String? rawDisplay,
   }) {
     String display = '-';
-
     if (rawDisplay != null) {
-      display = rawDisplay; // ✅ ໃຊ້ string ໂດຍກົງ
+      display = rawDisplay;
     } else if (value != null) {
       final num = double.tryParse(value.toString()) ?? 0;
       if (num > 0) {
@@ -188,7 +259,6 @@ class _RateTabState extends State<RateTab> {
             : '${_fmt.format(num.round())} ກີບ';
       }
     }
-
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
