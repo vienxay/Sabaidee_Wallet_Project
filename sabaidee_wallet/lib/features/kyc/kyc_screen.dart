@@ -1,10 +1,4 @@
 // lib/features/kyc/kyc_screen.dart
-// ✅ ອັບເດດຕາມ Design:
-//    - Single page form
-//    - Fields: fullName, gender, dateOfBirth, nationality, email,
-//              passportNumber, expiryDate, passportScan
-//    - ປຸ່ມ "ຢືນຢັນ"
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,9 +8,12 @@ import '../../core/app_colors.dart';
 import '../../models/kyc_model.dart';
 import '../../models/kyc_status.dart';
 import '../../services/kyc_service.dart';
-import '../../services/kyc_gate_service.dart';
+import '../../services/kyc_gate_service.dart'; // ✅ KycRouteArgs & KycExistingData ມາຈາກທີ່ນີ້
 import '../../widgets/common_widgets.dart';
 import 'kyc_success_screen.dart';
+
+// ✅ ລຶບ class KycRouteArgs ແລະ KycExistingData ອອກຈາກໄຟລ໌ນີ້ແລ້ວ
+//    ໃຊ້ຈາກ kyc_gate_service.dart ແທນ (single source of truth)
 
 class KycScreen extends StatefulWidget {
   const KycScreen({super.key});
@@ -29,7 +26,6 @@ class _KycScreenState extends State<KycScreen> {
 
   final _data = KycModel();
 
-  // Controllers
   final _fullName = TextEditingController();
   final _nationality = TextEditingController();
   final _email = TextEditingController();
@@ -42,8 +38,29 @@ class _KycScreenState extends State<KycScreen> {
 
   final _picker = ImagePicker();
 
+  // ✅ cast ໃຊ້ KycRouteArgs ຈາກ kyc_gate_service.dart
   KycRouteArgs? get _args =>
       ModalRoute.of(context)?.settings.arguments as KycRouteArgs?;
+
+  bool get _isResubmit => _args?.existingData != null;
+
+  // ── Pre-fill ──────────────────────────────────────────────────────────────
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final existing = _args?.existingData;
+    if (existing != null && _fullName.text.isEmpty) {
+      _fullName.text = existing.fullName ?? '';
+      _nationality.text = existing.nationality ?? '';
+      _email.text = existing.email ?? '';
+      _passportNumber.text = existing.passportNumber ?? '';
+      setState(() {
+        _gender = existing.gender;
+        _dateOfBirth = existing.dateOfBirth;
+        _expiryDate = existing.expiryDate;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -54,11 +71,11 @@ class _KycScreenState extends State<KycScreen> {
     super.dispose();
   }
 
-  // ── Date Pickers ─────────────────────────────────────────────────────────
+  // ── Date Pickers ──────────────────────────────────────────────────────────
   Future<void> _pickDob() async {
     final d = await showDatePicker(
       context: context,
-      initialDate: DateTime(1995),
+      initialDate: _dateOfBirth ?? DateTime(1995),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
       builder: (ctx, child) => _datePickerTheme(ctx, child!),
@@ -69,7 +86,7 @@ class _KycScreenState extends State<KycScreen> {
   Future<void> _pickExpiry() async {
     final d = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _expiryDate ?? DateTime.now().add(const Duration(days: 365)),
       firstDate: DateTime.now(),
       lastDate: DateTime(2060),
       builder: (ctx, child) => _datePickerTheme(ctx, child!),
@@ -110,7 +127,7 @@ class _KycScreenState extends State<KycScreen> {
       _email.text.trim().isNotEmpty &&
       _passportNumber.text.trim().isNotEmpty &&
       _expiryDate != null &&
-      _passportScan != null;
+      (_passportScan != null || _isResubmit);
 
   // ── Submit ────────────────────────────────────────────────────────────────
   Future<void> _submit() async {
@@ -171,9 +188,9 @@ class _KycScreenState extends State<KycScreen> {
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          'KYC',
-          style: TextStyle(
+        title: Text(
+          _isResubmit ? 'ອັບເດດ KYC' : 'KYC',
+          style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
             color: AppColors.kText,
@@ -198,19 +215,22 @@ class _KycScreenState extends State<KycScreen> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: AppColors.kGreen.withValues(alpha: 0.12),
+                      color: (_isResubmit ? AppColors.kError : AppColors.kGreen)
+                          .withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.verified_user_rounded,
-                      color: AppColors.kGreen,
+                    child: Icon(
+                      _isResubmit
+                          ? Icons.edit_note_rounded
+                          : Icons.verified_user_rounded,
+                      color: _isResubmit ? AppColors.kError : AppColors.kGreen,
                       size: 28,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'ຢືນຢັນຕົວຕົນຂອງທ່ານ',
-                    style: TextStyle(
+                  Text(
+                    _isResubmit ? 'ແກ້ໄຂຂໍ້ມູນ KYC' : 'ຢືນຢັນຕົວຕົນຂອງທ່ານ',
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: AppColors.kText,
@@ -219,7 +239,13 @@ class _KycScreenState extends State<KycScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
+
+            // Rejection Banner
+            if (_isResubmit) ...[
+              _RejectionBanner(note: _args?.existingData?.reviewNote),
+              const SizedBox(height: 16),
+            ],
 
             // ── Form Card ────────────────────────────────────────────────
             Container(
@@ -231,7 +257,6 @@ class _KycScreenState extends State<KycScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Full Name
                   KycTextField(
                     label: 'Full Name',
                     controller: _fullName,
@@ -239,8 +264,6 @@ class _KycScreenState extends State<KycScreen> {
                     required: true,
                   ),
                   const SizedBox(height: 14),
-
-                  // Gender
                   _buildLabel('Gender'),
                   const SizedBox(height: 5),
                   _GenderDropdown(
@@ -248,8 +271,6 @@ class _KycScreenState extends State<KycScreen> {
                     onChanged: (v) => setState(() => _gender = v),
                   ),
                   const SizedBox(height: 14),
-
-                  // Date of Birth
                   _buildLabel('Date of Birth'),
                   const SizedBox(height: 5),
                   _DateField(
@@ -258,8 +279,6 @@ class _KycScreenState extends State<KycScreen> {
                     onTap: _pickDob,
                   ),
                   const SizedBox(height: 14),
-
-                  // Nationality
                   KycTextField(
                     label: 'Nationality',
                     controller: _nationality,
@@ -267,8 +286,6 @@ class _KycScreenState extends State<KycScreen> {
                     required: true,
                   ),
                   const SizedBox(height: 14),
-
-                  // Email Address
                   KycTextField(
                     label: 'Email Address',
                     controller: _email,
@@ -277,8 +294,6 @@ class _KycScreenState extends State<KycScreen> {
                     keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 14),
-
-                  // Passport Number
                   KycTextField(
                     label: 'Passport Number',
                     controller: _passportNumber,
@@ -287,8 +302,6 @@ class _KycScreenState extends State<KycScreen> {
                     formatters: [],
                   ),
                   const SizedBox(height: 14),
-
-                  // Expiry Date
                   _buildLabel('Expiry Date'),
                   const SizedBox(height: 5),
                   _DateField(
@@ -297,12 +310,15 @@ class _KycScreenState extends State<KycScreen> {
                     onTap: _pickExpiry,
                   ),
                   const SizedBox(height: 14),
-
-                  // Passport Scan
-                  _buildLabel('Passport scan (BIO-DATE-PAGE)'),
+                  _buildLabel(
+                    _isResubmit
+                        ? 'Passport scan (ຖ້າບໍ່ປ່ຽນ ຮູບເກົ່າຍັງໃຊ້ໄດ້)'
+                        : 'Passport scan (BIO-DATE-PAGE)',
+                  ),
                   const SizedBox(height: 8),
                   _PassportScanBox(
                     file: _passportScan,
+                    isResubmit: _isResubmit,
                     onTap: _pickPassportScan,
                   ),
                 ],
@@ -364,9 +380,9 @@ class _KycScreenState extends State<KycScreen> {
                           strokeWidth: 2.5,
                         ),
                       )
-                    : const Text(
-                        'ຢືນຢັນ',
-                        style: TextStyle(
+                    : Text(
+                        _isResubmit ? 'ສົ່ງຄືນໃໝ່' : 'ຢືນຢັນ',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                         ),
@@ -389,11 +405,73 @@ class _KycScreenState extends State<KycScreen> {
   );
 }
 
+// ─── Rejection Banner ─────────────────────────────────────────────────────────
+class _RejectionBanner extends StatelessWidget {
+  final String? note;
+  const _RejectionBanner({this.note});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.kError.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.kError.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.kError,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'KYC ຂອງທ່ານຖືກປະຕິເສດ',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.kError,
+                  ),
+                ),
+                if (note != null && note!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    note!,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.kError.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                const Text(
+                  'ກະລຸນາແກ້ໄຂຂໍ້ມູນທີ່ຖືກຕ້ອງແລ້ວສົ່ງຄືນໃໝ່',
+                  style: TextStyle(fontSize: 12, color: AppColors.kMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Gender Dropdown ──────────────────────────────────────────────────────────
 class _GenderDropdown extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
-
   const _GenderDropdown({required this.value, required this.onChanged});
 
   @override
@@ -421,10 +499,8 @@ class _GenderDropdown extends StatelessWidget {
           dropdownColor: AppColors.kCard,
           style: const TextStyle(color: AppColors.kText, fontSize: 14),
           items: const [
-            // ✅ FIX: ສົ່ງ 'M' / 'F' ຕົງກັບ backend enum ['M', 'F']
             DropdownMenuItem(value: 'M', child: Text('Male')),
             DropdownMenuItem(value: 'F', child: Text('Female')),
-            // ✅ FIX: ລຶບ 'other' ອອກ — backend ບໍ່ຮັບ
           ],
           onChanged: onChanged,
         ),
@@ -438,7 +514,6 @@ class _DateField extends StatelessWidget {
   final DateTime? value;
   final String hint;
   final VoidCallback onTap;
-
   const _DateField({
     required this.value,
     required this.hint,
@@ -446,7 +521,8 @@ class _DateField extends StatelessWidget {
   });
 
   String _format(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   @override
   Widget build(BuildContext context) {
@@ -485,9 +561,13 @@ class _DateField extends StatelessWidget {
 // ─── Passport Scan Box ────────────────────────────────────────────────────────
 class _PassportScanBox extends StatelessWidget {
   final File? file;
+  final bool isResubmit;
   final VoidCallback onTap;
-
-  const _PassportScanBox({required this.file, required this.onTap});
+  const _PassportScanBox({
+    required this.file,
+    required this.isResubmit,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -500,7 +580,11 @@ class _PassportScanBox extends StatelessWidget {
           color: AppColors.kBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: file != null ? AppColors.kGreen : const Color(0xFFF5A623),
+            color: file != null
+                ? AppColors.kGreen
+                : isResubmit
+                ? AppColors.kBorder
+                : const Color(0xFFF5A623),
             width: 1.5,
           ),
         ),
@@ -525,19 +609,26 @@ class _PassportScanBox extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Upload Document',
-                    style: TextStyle(
+                  Text(
+                    isResubmit
+                        ? 'ອັບໂຫລດຮູບໃໝ່ (ຖ້າຕ້ອງການ)'
+                        : 'Upload Document',
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppColors.kText,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Drag and drop or click to\nupload a clear photo of\nyour passport',
+                  Text(
+                    isResubmit
+                        ? 'ຖ້າບໍ່ອັບໂຫລດ ຮູບເກົ່າຈະຖືກໃຊ້ຕໍ່'
+                        : 'Drag and drop or click to\nupload a clear photo of\nyour passport',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.kMuted),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.kMuted,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(

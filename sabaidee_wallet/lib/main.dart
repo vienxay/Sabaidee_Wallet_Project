@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'core/navigator_key.dart'; // ✅ ເພີ່ມ
 import 'features/admin/admin_screen.dart';
 import 'features/auth/forgot_password_screen.dart';
 import 'features/auth/google_callback_screen.dart';
@@ -18,7 +19,7 @@ import 'features/profile/profile_screen.dart';
 import 'services/auth_service.dart';
 import 'services/kyc_gate_service.dart';
 import 'services/storage_service.dart';
-import 'services/session_timeout_service.dart'; // ✅ ເພີ່ມ
+import 'services/session_timeout_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,17 +40,16 @@ void main() async {
   var isAdmin = false;
 
   try {
-    // ✅ ແກ້ 3s → 10s
     await StorageService.instance.init().timeout(const Duration(seconds: 10));
 
     isLoggedIn = await AuthService.instance.isLoggedIn().timeout(
-      const Duration(seconds: 10), // ✅ ແກ້ 3s → 10s
+      const Duration(seconds: 10),
       onTimeout: () => false,
     );
 
     if (isLoggedIn) {
       KycGateService.instance.syncFromBackend();
-      final user = await AuthService.instance.getMe(); // Admin
+      final user = await AuthService.instance.getMe();
       isAdmin = user?.isAdmin ?? false;
     }
   } catch (e) {
@@ -75,7 +75,6 @@ class SabaideeWallet extends StatefulWidget {
 
 class _SabaideeWalletState extends State<SabaideeWallet> {
   final _appLinks = AppLinks();
-  final _navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription? _linkSub;
 
   @override
@@ -83,8 +82,8 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     super.initState();
     _initDeepLinks();
 
-    // ✅ ເລີ່ມ Session Timeout
-    SessionTimeoutService.instance.init(_navigatorKey);
+    // ✅ ໃຊ້ navigatorKey global ແທນ _navigatorKey
+    SessionTimeoutService.instance.init(navigatorKey);
     if (widget.isLoggedIn) {
       SessionTimeoutService.instance.onUserActivity();
     }
@@ -104,7 +103,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
 
     final isLoggedIn = await AuthService.instance.isLoggedIn();
     if (!isLoggedIn) {
-      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/login',
         (route) => false,
       );
@@ -114,13 +113,13 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     switch (uri.host) {
       case 'home':
         await KycGateService.instance.syncFromBackend();
-        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/home',
           (route) => false,
         );
         break;
       case 'kyc':
-        _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/kyc',
           (route) => false,
         );
@@ -131,7 +130,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
   @override
   void dispose() {
     _linkSub?.cancel();
-    SessionTimeoutService.instance.dispose(); // ✅ ເພີ່ມ
+    SessionTimeoutService.instance.dispose();
     super.dispose();
   }
 
@@ -143,13 +142,12 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     return MaterialApp(
       title: 'Sabaidee Wallet',
       debugShowCheckedModeBanner: false,
-      navigatorKey: _navigatorKey,
+      navigatorKey: navigatorKey, // ✅ ໃຊ້ global key
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         fontFamily: 'NotoSansLao',
       ),
-      // ✅ ດັກທຸກ gesture → reset session timer
       builder: (context, child) => GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () => SessionTimeoutService.instance.onUserActivity(),
@@ -167,7 +165,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
         '/home': (_) => const HomeScreen(),
         '/profile': (_) => const ProfileScreen(),
         '/kyc': (_) => const KycScreen(),
-        '/admin': (_) => const AdminScreen(), // Admin
+        '/admin': (_) => const AdminScreen(),
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
       },
       onUnknownRoute: (settings) =>

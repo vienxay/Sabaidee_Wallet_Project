@@ -353,7 +353,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
                         ),
                       )
                     : Text(
-                        _invoice == null ? 'ສ້າງ Invoice' : 'ສຳເນົາ Invoice',
+                        _invoice == null ? 'ສ້າງ Invoice' : ' Copy Invoice',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,

@@ -5,16 +5,9 @@ class AppConstants {
   AppConstants._();
 
   // ─── Base URL ───────────────────────────────────────────────────────────────
-  // flutter run --dart-define=API_BASE_URL=https://api.example.com
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-
-    // defaultValue: 'http://10.0.2.2:3000', // Android Emulator → localhost
-    // defaultValue: 'http://172.28.103.68:3000',
-
-    // ngrok test
-    defaultValue:
-        'https://unpluralized-membranophonic-saniya.ngrok-free.dev', // ✅ ວາງ URL ngrok ຂອງທ່ານ
+    defaultValue: 'https://unpluralized-membranophonic-saniya.ngrok-free.dev',
   );
 
   // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -26,15 +19,12 @@ class AppConstants {
   static const String authVerifyOtp = '/api/auth/verify-otp';
   static const String authResetPass = '/api/auth/reset-password';
   static const String authGoogle = '/api/auth/google';
-  // static const String authProfile = '/api/auth/profile';
-  // static const String authPassword = '/api/auth/password';
-  static const String baseUrl = apiBaseUrl; // ✅ alias ສຳລັບ upload
-  static const String authProfileImage =
-      '/api/auth/profile/image'; // ✅ route ໃໝ່
+  static const String baseUrl = apiBaseUrl;
+  static const String authProfileImage = '/api/auth/profile/image';
 
   // ─── Profile ─────────────────────────────────────────────────────────────────
-  static const String profileMe = '/api/profile/me'; // GET / PUT
-  static const String profileAvatar = '/api/profile/avatar'; // POST
+  static const String profileMe = '/api/profile/me';
+  static const String profileAvatar = '/api/profile/avatar';
 
   // ─── Wallet ──────────────────────────────────────────────────────────────────
   static const String wallet = '/api/wallet';
@@ -57,26 +47,30 @@ class AppConstants {
   static const String transactionSummary = '/api/transactions/summary';
 
   // ─── KYC ─────────────────────────────────────────────────────────────────────
-  static const String kycStatus = '/api/kyc';
-  static const String kycSubmit = '/api/kyc/submit';
+  static const String kycStatus = '/api/kyc'; // GET  — ດຶງ status + kyc object
+  static const String kycSubmit =
+      '/api/kyc/submit'; // POST — submit / re-submit
+  static const String kycList = '/api/kyc/list'; // ✅ GET  — admin list
+  static const String kycVerify =
+      '/api/kyc/verify'; // ✅ PUT  — admin review (:userId)
 
   // ─── HTTP Config ──────────────────────────────────────────────────────────────
-  static const int connectTimeoutMs = 10000; // 10 ວິນາທີ
-  static const int receiveTimeoutMs = 15000; // 15 ວິນາທີ
+  static const int connectTimeoutMs = 10000;
+  static const int receiveTimeoutMs = 15000;
 
   // ─── Local Storage Keys ────────────────────────────────────────────────────────
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
 
   // ─── App Config ────────────────────────────────────────────────────────────────
-  static const String appScheme = 'sabaidee'; // deep-link: sabaidee://
+  static const String appScheme = 'sabaidee';
 
-  // Withdrawal endpoints
+  // ─── Withdrawal ───────────────────────────────────────────────────────────────
   static const String withdrawalLimitStatus = '/api/withdrawal/limit-status';
   static const String withdrawalPreview = '/api/withdrawal/preview';
   static const String withdrawalSend = '/api/withdrawal/send';
 
-  // Admin
+  // ─── Admin ────────────────────────────────────────────────────────────────────
   static const adminKyc = '/api/admin/kyc';
   static const adminKycReview = '/api/admin/kyc/review';
   static const adminUsers = '/api/admin/users';

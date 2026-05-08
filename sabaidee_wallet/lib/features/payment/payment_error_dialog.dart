@@ -260,7 +260,7 @@ class _PaymentErrorDialogState extends State<PaymentErrorDialog>
                       children: [
                         if (cfg.showKYC && widget.onGoToKYC != null) ...[
                           _PrimaryBtn(
-                            label: 'ໄປຢືນຢັນ KYC',
+                            label: 'ຢືນຢັນ KYC',
                             color: cfg.color,
                             icon: Icons.shield_outlined,
                             onTap: () {

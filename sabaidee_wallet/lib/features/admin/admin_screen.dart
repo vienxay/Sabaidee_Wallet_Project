@@ -27,9 +27,15 @@ class _AdminScreenState extends State<AdminScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              // ✅ ເກັບໄວ້ກ່ອນ await
+              final navigator = Navigator.of(context);
+
               await AuthService.instance.logout();
+
               if (!mounted) return;
-              Navigator.pushReplacementNamed(context, '/welcome');
+              navigator.pushReplacementNamed(
+                '/welcome',
+              ); // ← ໃຊ້ navigator ທີ່ເກັບໄວ້
             },
           ),
         ],

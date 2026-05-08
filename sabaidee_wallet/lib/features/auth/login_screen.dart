@@ -3,6 +3,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
 import 'package:sabaidee_wallet/core/core.dart';
+import '../../features/auth/login_error_dialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,7 +18,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  // ✅ ເພີ່ມ initState
   @override
   void initState() {
     super.initState();
@@ -25,11 +25,21 @@ class _LoginScreenState extends State<LoginScreen> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args == 'session_expired') {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ໝົດເວລາໃຊ້ງານ — ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່'),
-            backgroundColor: Colors.orange,
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('ໝົດເວລາໃຊ້ງານ — ກະລຸນາເຂົ້າສູ່ລະບົບໃໝ່'),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade700,
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 4),
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -44,16 +54,46 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    // ── Validation ──────────────────────────────────────────
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      await LoginErrorDialog.show(
+        context,
+        message: 'ກະລຸນາປ້ອນ Email ແລະ ລະຫັດຜ່ານໃຫ້ຄົບ',
+        type: LoginErrorType.validation,
+      );
+      return;
+    }
+
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      await LoginErrorDialog.show(
+        context,
+        message: 'ຮູບແບບ Email ບໍ່ຖືກຕ້ອງ',
+        type: LoginErrorType.validation,
+      );
+      return;
+    }
+
+    if (password.length < 6) {
+      await LoginErrorDialog.show(
+        context,
+        message: 'ລະຫັດຜ່ານຕ້ອງມີຢ່າງໜ້ອຍ 6 ຕົວ',
+        type: LoginErrorType.validation,
+      );
+      return;
+    }
+
+    // ── Auth ────────────────────────────────────────────────
     setState(() => _isLoading = true);
     try {
       final result = await AuthService.instance.login(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: password,
       );
       if (!mounted) return;
 
-      // ✅ ກວດ role ກ່ອນ redirect
       if (result.user?.isAdmin == true) {
         Navigator.pushNamedAndRemoveUntil(context, '/admin', (_) => false);
       } else {
@@ -61,22 +101,15 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showError(e.toString().replaceAll('Exception: ', ''));
+      final msg = e.toString().replaceAll('Exception: ', '');
+      await LoginErrorDialog.show(
+        context,
+        message: msg,
+        type: LoginErrorType.auth,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
   }
 
   @override
@@ -123,23 +156,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 32),
 
+                // ── Email ──
                 CustomTextField(
                   controller: _emailController,
                   hintText: 'Email',
                   prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'ກະລຸນາໃສ່ Email';
-                    if (!RegExp(
-                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                    ).hasMatch(v.trim())) {
-                      return 'Email ບໍ່ຖືກຕ້ອງ';
-                    }
-                    return null;
-                  },
                 ),
 
+                // ── Password ──
                 CustomTextField(
                   controller: _passwordController,
                   hintText: 'Password',
@@ -147,11 +173,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   isPassword: true,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _login(),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'ກະລຸນາໃສ່ລະຫັດຜ່ານ';
-                    if (v.length < 6) return 'ລະຫັດຜ່ານຕ້ອງມີຢ່າງໜ້ອຍ 6 ຕົວ';
-                    return null;
-                  },
                 ),
 
                 Align(

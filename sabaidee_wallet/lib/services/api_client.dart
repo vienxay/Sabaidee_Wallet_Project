@@ -2,8 +2,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../core/app_constants.dart';
+import '../core/navigator_key.dart'; // ✅ ເພີ່ມ
 import 'storage_service.dart';
 
 class ApiResponse {
@@ -25,10 +27,9 @@ class ApiClient {
   static final ApiClient instance = ApiClient._();
   static Duration get uploadTimeout => _uploadTimeout;
 
-  // ✅ Timeout constants
-  static const _connectTimeout = Duration(seconds: 20); // POST, PUT, DELETE
-  static const _receiveTimeout = Duration(seconds: 20); // GET
-  static const _uploadTimeout = Duration(seconds: 60); // File upload
+  static const _connectTimeout = Duration(seconds: 20);
+  static const _receiveTimeout = Duration(seconds: 20);
+  static const _uploadTimeout = Duration(seconds: 60);
 
   Future<Map<String, String>> _headers({bool auth = true}) async {
     final token = await StorageService.instance.getToken();
@@ -39,7 +40,6 @@ class ApiClient {
     };
   }
 
-  // api_client.dart — ເພີ່ມ method ນີ້ເຂົ້າໄປໃນ class ApiClient
   Future<String?> getAuthToken() async {
     return await StorageService.instance.getToken();
   }
@@ -52,8 +52,7 @@ class ApiClient {
             Uri.parse('${AppConstants.apiBaseUrl}$path'),
             headers: await _headers(),
           )
-          .timeout(_receiveTimeout); // ✅ timeout
-
+          .timeout(_receiveTimeout);
       return _handleResponse(response);
     } on TimeoutException {
       return ApiResponse(
@@ -84,8 +83,7 @@ class ApiClient {
             body: jsonEncode(body),
           )
           .timeout(_connectTimeout);
-
-      return _handleResponse(response, auth: auth); // ✅ ສົ່ງ auth
+      return _handleResponse(response, auth: auth);
     } on TimeoutException {
       return ApiResponse(
         success: false,
@@ -114,8 +112,7 @@ class ApiClient {
             headers: await _headers(auth: auth),
             body: jsonEncode(body),
           )
-          .timeout(_connectTimeout); // ✅ timeout
-
+          .timeout(_connectTimeout);
       return _handleResponse(response);
     } on TimeoutException {
       return ApiResponse(
@@ -140,8 +137,7 @@ class ApiClient {
             Uri.parse('${AppConstants.apiBaseUrl}$path'),
             headers: await _headers(),
           )
-          .timeout(_connectTimeout); // ✅ timeout
-
+          .timeout(_connectTimeout);
       return _handleResponse(response);
     } on TimeoutException {
       return ApiResponse(
@@ -160,12 +156,21 @@ class ApiClient {
 
   // ─── Handle Response ──────────────────────────────────────────────
   ApiResponse _handleResponse(http.Response response, {bool auth = true}) {
-    // ✅ clear storage ສະເພາະຕອນ authenticated request ເທົ່ານັ້ນ
+    // ✅ 401 → logout ອັດຕະໂນມັດ + navigate ໄປ /login
     if (response.statusCode == 401 && auth) {
       StorageService.instance.clearAll();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (_) => false,
+          arguments: 'session_expired',
+        );
+      });
+
       return ApiResponse(
         success: false,
-        message: 'Session ໝົດອາຍຸ ກະລຸນາ login ໃໝ່',
+        message: 'session_expired',
         statusCode: 401,
       );
     }

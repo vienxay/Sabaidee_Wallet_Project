@@ -15,6 +15,7 @@ enum KycStatus {
 extension KycStatusX on KycStatus {
   bool get isVerified => this == KycStatus.verified;
   bool get isSubmitted => this == KycStatus.submitted;
+  bool get isRejected => this == KycStatus.rejected;
   bool get canSubmit => this == KycStatus.none || this == KycStatus.rejected;
 
   String get label {

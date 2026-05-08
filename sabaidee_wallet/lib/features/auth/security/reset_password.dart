@@ -100,7 +100,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Password Reset!',
+              'ສຳເລັດ!',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -169,7 +169,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Reset Password',
+                'ການຕັ້ງລະຫັດຜ່ານໃໝ່',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -210,7 +210,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               ),
               const SizedBox(height: 24),
               CustomButton(
-                text: 'Reset Password',
+                text: 'ຕົກລົງ',
                 isLoading: _isLoading,
                 backgroundColor: AppColors.primary,
                 onPressed: _isLoading ? null : _resetPassword,

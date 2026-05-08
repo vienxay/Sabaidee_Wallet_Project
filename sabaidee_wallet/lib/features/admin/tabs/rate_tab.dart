@@ -13,7 +13,7 @@ class RateTab extends StatefulWidget {
 class _RateTabState extends State<RateTab> {
   final _api = ApiClient.instance;
   final _usdController = TextEditingController();
-  final _spreadController = TextEditingController(); // ✅ ເພີ່ມ
+  final _spreadController = TextEditingController();
   final _fmt = NumberFormat('#,##0', 'en_US');
   bool _loading = false;
   Map? _currentRate;
@@ -27,20 +27,22 @@ class _RateTabState extends State<RateTab> {
   @override
   void dispose() {
     _usdController.dispose();
-    _spreadController.dispose(); // ✅ ເພີ່ມ
+    _spreadController.dispose();
     super.dispose();
   }
 
   Future<void> _fetch() async {
     if (!mounted) return;
     setState(() => _loading = true);
+
+    // ✅ ລຶບ bool success = false; ອອກ
     try {
       final res = await _api.get(AppConstants.adminRate);
       if (res.success && res.data?['rate'] != null) {
+        // ✅ ລຶບ success = true; ອອກ
         if (!mounted) return;
         setState(() {
           _currentRate = res.data!['rate'];
-          // ✅ ໃຊ້ usdToLAKBase ແທນ usdToLAK
           _usdController.text =
               (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0)
                   .toString();
@@ -49,12 +51,10 @@ class _RateTabState extends State<RateTab> {
         });
       }
     } finally {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  // ✅ ຄຳນວນ preview ລາຄາຂາຍ
   String _previewSell() {
     final base = double.tryParse(_usdController.text) ?? 0;
     final spread = double.tryParse(_spreadController.text) ?? 0;
@@ -81,7 +81,7 @@ class _RateTabState extends State<RateTab> {
     }
 
     final res = await _api.post(AppConstants.adminUpdateRate, {
-      'usdToLAK': usdToLAK, // ✅ ສົ່ງທັງ 2
+      'usdToLAK': usdToLAK,
       'spreadPercent': spreadPercent,
     });
 
@@ -154,15 +154,17 @@ class _RateTabState extends State<RateTab> {
                     const SizedBox(height: 24),
                   ],
 
-                  // ✅ Preview ລາຄາຂາຍ
+                  // ✅ Preview ລາຄາຂາຍ — ແກ້ withOpacity → withValues
                   if (_currentRate != null)
                     Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.teal.withOpacity(0.06),
+                        color: Colors.teal.withValues(alpha: 0.06), // ✅
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.teal.withOpacity(0.3)),
+                        border: Border.all(
+                          color: Colors.teal.withValues(alpha: 0.3), // ✅
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -183,7 +185,6 @@ class _RateTabState extends State<RateTab> {
                       ),
                     ),
 
-                  // ✅ Input usdToLAK
                   const Text(
                     'Base Rate (USD → LAK)',
                     style: TextStyle(fontWeight: FontWeight.bold),
@@ -192,7 +193,7 @@ class _RateTabState extends State<RateTab> {
                   TextField(
                     controller: _usdController,
                     keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}), // ✅ update preview
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: '1 USD = ? LAK',
                       border: OutlineInputBorder(),
@@ -201,7 +202,6 @@ class _RateTabState extends State<RateTab> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ✅ Input Spread %
                   const Text(
                     'Spread % (ກຳໄລ)',
                     style: TextStyle(fontWeight: FontWeight.bold),
@@ -212,7 +212,7 @@ class _RateTabState extends State<RateTab> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    onChanged: (_) => setState(() {}), // ✅ update preview
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: 'Spread %',
                       hintText: '0 = ບໍ່ມີ spread',

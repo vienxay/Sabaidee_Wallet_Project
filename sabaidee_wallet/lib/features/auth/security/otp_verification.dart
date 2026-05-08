@@ -6,7 +6,7 @@ import 'forgot_password.dart';
 import 'package:sabaidee_wallet/core/core.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
-  const OtpVerificationScreen({super.key}); // ✅ super.key
+  const OtpVerificationScreen({super.key});
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -25,9 +25,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   int _resendCountdown = 60;
 
   Timer? _timer;
-  Timer? _autoVerifyTimer; // ✅ cancel auto-verify ໄດ້
+  Timer? _autoVerifyTimer;
 
-  String _email = ''; // ✅ default value, ບໍ່ late
+  String _email = '';
   bool _argumentsLoaded = false;
 
   @override
@@ -44,7 +44,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       _email = args?['email']?.toString() ?? '';
       _argumentsLoaded = true;
 
-      // ✅ ກວດ email ຂາດ
       if (_email.isEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) Navigator.pop(context);
@@ -130,7 +129,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         ..showSnackBar(
           const SnackBar(
             content: Text('ສົ່ງລະຫັດ OTP ຄືນໃໝ່ແລ້ວ'),
-            backgroundColor: AppColors.success, // ✅ AppColors
+            backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -152,11 +151,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar() // ✅ ກັນ snackbar ຊ້ອນ
+      ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: AppColors.error, // ✅ AppColors
+          backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -166,12 +165,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     if (value.isNotEmpty) {
       if (index < 5) _focusNodes[index + 1].requestFocus();
     } else {
-      // ✅ Backspace: focus ຍ້ອນກັບ
       if (index > 0) _focusNodes[index - 1].requestFocus();
     }
     setState(() {});
 
-    // ✅ cancel timer ເກົ່າ ແລ້ວ start ໃໝ່
     _autoVerifyTimer?.cancel();
     if (_otpCode.length == 6) {
       _autoVerifyTimer = Timer(const Duration(milliseconds: 100), _verifyOtp);
@@ -196,7 +193,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              // ✅ Theme
               'ຢືນຢັນລະຫັດ OTP',
               style: Theme.of(
                 context,
@@ -234,8 +230,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       onPressed: _resendCountdown == 0 ? _resendOtp : null,
                       child: Text(
                         _resendCountdown > 0
-                            ? "Didn't receive code? Resend in ${_resendCountdown}s"
-                            : "Didn't receive code? Resend",
+                            // ✅ ແກ້: ${_resendCountdown} → $_resendCountdown
+                            ? 'ບໍ່ໄດ້ຮັບລະຫັດບໍ? ສົ່ງຄືນໃໝ່ໃນອີກ $_resendCountdown ວິນາທີ'
+                            : 'ບໍ່ໄດ້ຮັບລະຫັດບໍ? ສົ່ງຄືນໃໝ່',
                         style: TextStyle(
                           fontSize: 14,
                           color: _resendCountdown > 0

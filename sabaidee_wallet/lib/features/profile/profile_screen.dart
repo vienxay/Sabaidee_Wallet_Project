@@ -5,11 +5,13 @@ import 'dart:io';
 import '../../../widgets/custom_button.dart';
 import '../../../services/profile_service.dart';
 import '../../../services/auth_service.dart';
-import '../../../models/app_models.dart'; // ✅ UserModel
+import '../../../services/kyc_gate_service.dart';
+import '../../../services/kyc_service.dart';
+import '../../../models/app_models.dart';
+import '../../../models/kyc_status.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
-
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -27,6 +29,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _phoneController = TextEditingController();
   String? _selectedGender;
 
+  // ✅ KYC state
+  KycStatus _kycStatus = KycStatus.none;
+  KycExistingData? _kycExisting;
+
   @override
   void initState() {
     super.initState();
@@ -43,7 +49,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // ✅ แปลง ISO date → yyyy-MM-dd
   String _formatDate(String? isoDate) {
     if (isoDate == null || isoDate.isEmpty) return '';
     try {
@@ -57,28 +62,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
 
+    // ✅ ດຶງ KYC status ພ້ອມກັນ
     final results = await Future.wait([
       ProfileService.getProfile(),
       AuthService.instance.getMe(),
+      KycGateService.instance.syncFromBackend().then(
+        (_) => KycGateService.instance.getStatus(),
+      ),
     ]);
 
     final profile = results[0] as ProfileModel?;
     final user = results[1] as UserModel?;
+    final kycStatus = results[2] as KycStatus;
+
+    KycExistingData? kycExisting;
+    if (kycStatus == KycStatus.rejected) {
+      try {
+        final res = await KycService.checkMyStatus();
+        if (res['success'] == true) kycExisting = KycExistingData.fromJson(res);
+      } catch (_) {}
+    }
 
     if (mounted) {
       setState(() {
         _nameController.text = profile?.name ?? '';
         _lastNameController.text = profile?.lastName ?? '';
-        _emailController.text = user?.email ?? ''; // ✅ จาก UserModel
+        _emailController.text = user?.email ?? '';
         _phoneController.text = profile?.phone ?? '';
-        _dobController.text = _formatDate(profile?.dateOfBirth); // ✅ format ถูก
-        _profileImageUrl = profile?.profileImage; // ✅ Cloudinary full URL
+        _dobController.text = _formatDate(profile?.dateOfBirth);
+        _profileImageUrl = profile?.profileImage;
 
         const validGenders = ['male', 'female', 'other'];
         _selectedGender = validGenders.contains(profile?.gender)
             ? profile?.gender
             : null;
 
+        _kycStatus = kycStatus;
+        _kycExisting = kycExisting;
         _isLoading = false;
       });
     }
@@ -89,7 +109,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_dobController.text.isNotEmpty) {
       initial = DateTime.tryParse(_dobController.text);
     }
-
     final picked = await showDatePicker(
       context: context,
       initialDate: initial ?? DateTime(2000),
@@ -117,14 +136,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       imageQuality: 50,
     );
     if (pickedFile == null) return;
-
     setState(() => _imageFile = File(pickedFile.path));
 
     final newUrl = await ProfileService.uploadAvatar(File(pickedFile.path));
     if (newUrl != null && mounted) {
-      setState(
-        () => _profileImageUrl = newUrl,
-      ); // ✅ Cloudinary full URL ใช้ได้เลย
+      setState(() => _profileImageUrl = newUrl);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('ອັບໂຫລດຮູບສຳເລັດ'),
@@ -136,7 +152,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _saveProfile() async {
     setState(() => _isSaving = true);
-
     String? nullIfEmpty(String text) =>
         text.trim().isEmpty ? null : text.trim();
 
@@ -161,6 +176,283 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // ✅ ເປີດໜ້າ KYC ສຳລັບ re-submit
+  void _openKycResubmit() {
+    Navigator.of(context).pushNamed(
+      '/kyc',
+      arguments: KycRouteArgs(
+        existingData: _kycExisting,
+        onCompleted: () => _loadProfile(),
+      ),
+    );
+  }
+
+  // ✅ ເປີດໜ້າ KYC ຄັ້ງທຳອິດ
+  void _openKycSubmit() {
+    Navigator.of(context).pushNamed(
+      '/kyc',
+      arguments: KycRouteArgs(onCompleted: () => _loadProfile()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black54),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: CustomButton(
+          text: 'ແກ້ໄຂຂໍ້ມູນ',
+          icon: const Icon(Icons.edit, color: Colors.white, size: 20),
+          onPressed: _showEditProfileModal,
+          backgroundColor: const Color(0xFFF7941D),
+        ),
+      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFF7941D)),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Text(
+                    'ຂໍ້ມູນສ່ວນຕົວ',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333),
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  _buildPhotoPicker(),
+                  const SizedBox(height: 40),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'ຂໍ້ມູນທົ່ວໄປ',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInfoList(),
+                  const SizedBox(height: 28),
+
+                  // ✅ KYC Section
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'ການຢືນຢັນຕົວຕົນ (KYC)',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildKycSection(),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+    );
+  }
+
+  // ✅ KYC Section Widget
+  Widget _buildKycSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kycBorderColor, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _kycIconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(_kycIcon, color: _kycColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _kycLabel,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _kycColor,
+                      ),
+                    ),
+                    Text(
+                      _kycSubLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF7A8C87),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Status badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: _kycBadgeBg,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _kycBadgeText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _kycColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // ✅ Rejection note
+          if (_kycStatus == KycStatus.rejected &&
+              _kycExisting?.reviewNote != null &&
+              _kycExisting!.reviewNote!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAEEDA),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: Color(0xFF854F0B),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _kycExisting!.reviewNote!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF854F0B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ✅ Action button
+          if (_kycStatus == KycStatus.rejected ||
+              _kycStatus == KycStatus.none) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: _kycStatus == KycStatus.rejected
+                    ? _openKycResubmit
+                    : _openKycSubmit,
+                icon: Icon(
+                  _kycStatus == KycStatus.rejected
+                      ? Icons.edit_note_rounded
+                      : Icons.verified_user_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  _kycStatus == KycStatus.rejected
+                      ? 'ແກ້ໄຂ & ສົ່ງ KYC ຄືນໃໝ່'
+                      : 'ເລີ່ມຢືນຢັນຕົວຕົນ',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kycStatus == KycStatus.rejected
+                      ? const Color(0xFFD94040)
+                      : const Color(0xFF1D9E75),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── KYC helpers ──────────────────────────────────────────────────────────
+  Color get _kycColor => switch (_kycStatus) {
+    KycStatus.verified => const Color(0xFF1D9E75),
+    KycStatus.submitted => const Color(0xFFBA7517),
+    KycStatus.rejected => const Color(0xFFD94040),
+    _ => const Color(0xFF7A8C87),
+  };
+
+  Color get _kycBorderColor => _kycColor.withValues(alpha: 0.25);
+  Color get _kycIconBg => _kycColor.withValues(alpha: 0.10);
+  Color get _kycBadgeBg => _kycColor.withValues(alpha: 0.10);
+
+  IconData get _kycIcon => switch (_kycStatus) {
+    KycStatus.verified => Icons.verified_user_rounded,
+    KycStatus.submitted => Icons.hourglass_top_rounded,
+    KycStatus.rejected => Icons.gpp_bad_outlined,
+    _ => Icons.verified_user_outlined,
+  };
+
+  String get _kycLabel => switch (_kycStatus) {
+    KycStatus.verified => 'ຢືນຢັນຕົວຕົນສຳເລັດ',
+    KycStatus.submitted => 'ກຳລັງກວດສອບ',
+    KycStatus.rejected => 'KYC ຖືກປະຕິເສດ',
+    _ => 'ຍັງບໍ່ຢືນຢັນຕົວຕົນ',
+  };
+
+  String get _kycSubLabel => switch (_kycStatus) {
+    KycStatus.verified => 'ໂອນເງິນໄດ້ໂດຍບໍ່ຈຳກັດ',
+    KycStatus.submitted => 'ໃຊ້ເວລາ 1–3 ວັນທຳການ',
+    KycStatus.rejected => 'ກະລຸນາແກ້ໄຂ ແລະ ສົ່ງຄືນ',
+    _ => 'ຕ້ອງ KYC ກ່ອນໂອນເກີນ limit',
+  };
+
+  String get _kycBadgeText => switch (_kycStatus) {
+    KycStatus.verified => 'Verified',
+    KycStatus.submitted => 'Pending',
+    KycStatus.rejected => 'Rejected',
+    _ => 'None',
+  };
+
+  // ── Profile helpers ───────────────────────────────────────────────────────
   void _showEditProfileModal() {
     showModalBottomSheet(
       context: context,
@@ -221,7 +513,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'ເບີໂທລະສັບ',
                         Icons.phone,
                       ),
-
                       Padding(
                         padding: const EdgeInsets.only(bottom: 15),
                         child: DropdownButtonFormField<String>(
@@ -257,7 +548,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               setModalState(() => _selectedGender = val),
                         ),
                       ),
-
                       const SizedBox(height: 30),
                       _isSaving
                           ? const CircularProgressIndicator(
@@ -279,149 +569,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildDateField() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
-        controller: _dobController,
-        readOnly: true,
-        onTap: _pickDate,
-        decoration: InputDecoration(
-          labelText: 'ວັນເດືອນປີເກີດ',
-          prefixIcon: const Icon(Icons.calendar_today, color: Colors.orange),
-          suffixIcon: const Icon(Icons.arrow_drop_down, color: Colors.orange),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.orange, width: 2),
-          ),
+  Widget _buildDateField() => Padding(
+    padding: const EdgeInsets.only(bottom: 15),
+    child: TextField(
+      controller: _dobController,
+      readOnly: true,
+      onTap: _pickDate,
+      decoration: InputDecoration(
+        labelText: 'ວັນເດືອນປີເກີດ',
+        prefixIcon: const Icon(Icons.calendar_today, color: Colors.orange),
+        suffixIcon: const Icon(Icons.arrow_drop_down, color: Colors.orange),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.orange, width: 2),
         ),
       ),
-    );
-  }
+    ),
+  );
 
   Widget _buildTextField(
     TextEditingController controller,
     String label,
     IconData icon,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.orange),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.orange, width: 2),
-          ),
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 15),
+    child: TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.orange),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.orange, width: 2),
         ),
       ),
-    );
-  }
+    ),
+  );
 
   Widget _buildReadOnlyField(
     TextEditingController controller,
     String label,
     IconData icon,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
-        controller: controller,
-        readOnly: true,
-        style: const TextStyle(color: Colors.grey),
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: Colors.grey),
-          filled: true,
-          fillColor: const Color(0xFFF5F5F5),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          suffixIcon: const Icon(
-            Icons.lock_outline,
-            color: Colors.grey,
-            size: 18,
-          ),
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 15),
+    child: TextField(
+      controller: controller,
+      readOnly: true,
+      style: const TextStyle(color: Colors.grey),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.grey),
+        filled: true,
+        fillColor: const Color(0xFFF5F5F5),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        suffixIcon: const Icon(
+          Icons.lock_outline,
+          color: Colors.grey,
+          size: 18,
         ),
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black54),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: CustomButton(
-          text: 'ແກ້ໄຂຂໍ້ມູນ',
-          icon: const Icon(Icons.edit, color: Colors.white, size: 20),
-          onPressed: _showEditProfileModal,
-          backgroundColor: const Color(0xFFF7941D),
-        ),
-      ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFF7941D)),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Text(
-                    'ຂໍ້ມູນສ່ວນຕົວ',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF333333),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  _buildPhotoPicker(),
-                  const SizedBox(height: 40),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'ຂໍ້ມູນທົ່ວໄປ',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInfoList(),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-    );
-  }
+    ),
+  );
 
   Widget _buildPhotoPicker() {
-    // ✅ Cloudinary URL ใช้ได้ตรงๆ ไม่ต้องรวม apiBaseUrl
     ImageProvider? imageProvider;
     if (_imageFile != null) {
       imageProvider = FileImage(_imageFile!);
     } else if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
-      imageProvider = NetworkImage(
-        _profileImageUrl!,
-      ); // ✅ full URL จาก Cloudinary
+      imageProvider = NetworkImage(_profileImageUrl!);
     }
 
     return GestureDetector(

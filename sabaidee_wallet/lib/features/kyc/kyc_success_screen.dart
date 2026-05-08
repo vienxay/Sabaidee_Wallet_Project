@@ -114,13 +114,13 @@ class _KycSuccessScreenState extends State<KycSuccessScreen>
                     ),
                     child: Column(
                       children: [
-                        const Text(
-                          'ລະຫັດອ້າງອີງ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.kMuted,
-                          ),
-                        ),
+                        // const Text(
+                        //   'ລະຫັດອ້າງອີງ',
+                        //   style: TextStyle(
+                        //     fontSize: 12,
+                        //     color: AppColors.kMuted,
+                        //   ),
+                        // ),
                         const SizedBox(height: 4),
                         Text(
                           widget.referenceId,
@@ -191,7 +191,7 @@ class _KycSuccessScreenState extends State<KycSuccessScreen>
                           ),
                         ),
                         child: const Text(
-                          'ກັບໄປດຳເນີນການ',
+                          'ດຳເນີນການ',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
