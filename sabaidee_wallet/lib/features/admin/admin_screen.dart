@@ -34,7 +34,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
               if (!mounted) return;
               navigator.pushReplacementNamed(
-                '/welcome',
+                '/login',
               ); // ← ໃຊ້ navigator ທີ່ເກັບໄວ້
             },
           ),

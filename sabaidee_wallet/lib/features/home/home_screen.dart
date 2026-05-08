@@ -178,6 +178,10 @@ class _HomeScreenState extends State<HomeScreen> {
           HomeTopBar(scaffoldKey: _scaffoldKey, user: _user),
           const SizedBox(height: 12),
 
+          // ✅ KYC Promo Banner — ສະແດງຖ້າ user ຍັງບໍ່ KYC
+          if (_kycStatus == KycStatus.none)
+            _KycPromoBanner(onTap: _openKycSubmit),
+
           HomeBalanceCard(
             wallet: _wallet,
             balanceVisible: _balanceVisible,
@@ -275,6 +279,14 @@ class _HomeScreenState extends State<HomeScreen> {
     MaterialPageRoute(builder: (_) => const HistoryScreen()),
   );
 
+  // ✅ ເປີດໜ້າ KYC ຄັ້ງທຳອິດ (status == none)
+  void _openKycSubmit() {
+    Navigator.of(context).pushNamed(
+      '/kyc',
+      arguments: KycRouteArgs(onCompleted: () => _loadData()),
+    );
+  }
+
   // ✅ ເປີດໜ້າ KYC ໃນໂໝດ re-submit
   void _openKycResubmit() {
     Navigator.of(context).pushNamed(
@@ -331,6 +343,11 @@ class _KycRejectedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ ຖ້າ admin ບໍ່ລະບຸ note ໃຫ້ໃຊ້ຂໍ້ຄວາມ default
+    final note = (reviewNote != null && reviewNote!.isNotEmpty)
+        ? reviewNote!
+        : 'ບໍ່ໄດ້ລະບຸເຫດຜົນ — ກະລຸນາຕິດຕໍ່ທີມງານ';
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.mediumImpact();
@@ -347,10 +364,12 @@ class _KycRejectedBanner extends StatelessWidget {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               width: 38,
               height: 38,
+              margin: const EdgeInsets.only(top: 2),
               decoration: BoxDecoration(
                 color: const Color(0xFFD94040).withValues(alpha: 0.12),
                 shape: BoxShape.circle,
@@ -374,25 +393,106 @@ class _KycRejectedBanner extends StatelessWidget {
                       color: Color(0xFFD94040),
                     ),
                   ),
-                  if (reviewNote != null && reviewNote!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      reviewNote!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: const Color(0xFFD94040).withValues(alpha: 0.75),
+                  const SizedBox(height: 4),
+                  // ✅ ສະແດງ reviewNote ສະເໝີ (ມີ fallback)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 12,
+                        color: Color(0xFFD94040),
                       ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          note,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFFD94040),
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'ກົດເພື່ອແກ້ໄຂ ແລະ ສົ່ງ KYC ຄືນ →',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFD94040),
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── KYC Promo Banner (compact) ──────────────────────────────────────────────
+class _KycPromoBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _KycPromoBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F7F2),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: const Color(0xFF1D9E75).withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
             const Icon(
-              Icons.chevron_right_rounded,
-              color: Color(0xFFD94040),
-              size: 20,
+              Icons.verified_user_outlined,
+              color: Color(0xFF1D9E75),
+              size: 15,
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'KYC ເພື່ອຊຳລະເງິນໄດ້ຫຼາຍກວ່າ ₭2,000,000 ຕໍ່ວັນ',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF0F7A5A),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1D9E75),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'KYC ເລີຍ',
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ],
         ),
