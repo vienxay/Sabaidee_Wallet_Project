@@ -181,7 +181,7 @@ class KycGateService {
               Navigator.of(context).pop();
             },
             child: const Text(
-              'ຮັບຊາບ',
+              'ຕົກລົງ',
               style: TextStyle(color: Color(0xFF1D9E75)),
             ),
           ),
@@ -415,7 +415,10 @@ class _KycRejectedSheet extends StatelessWidget {
             const SizedBox(height: 22),
 
             // ✅ ປຸ່ມ re-submit
-            _PrimaryButton(label: 'ແກ້ໄຂ & ສົ່ງ KYC ຄືນໃໝ່', onTap: onResubmit),
+            _PrimaryButton(
+              label: 'ແກ້ໄຂ & ອັດເດດ KYC ຄືນໃໝ່',
+              onTap: onResubmit,
+            ),
             const SizedBox(height: 10),
             _CancelButton(),
           ],

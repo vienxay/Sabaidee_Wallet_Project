@@ -381,7 +381,7 @@ class _KycScreenState extends State<KycScreen> {
                         ),
                       )
                     : Text(
-                        _isResubmit ? 'ສົ່ງຄືນໃໝ່' : 'ຢືນຢັນ',
+                        _isResubmit ? 'ອັບເດດຄືນໃໝ່' : 'ຢືນຢັນ',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -456,7 +456,7 @@ class _RejectionBanner extends StatelessWidget {
                 ],
                 const SizedBox(height: 4),
                 const Text(
-                  'ກະລຸນາແກ້ໄຂຂໍ້ມູນທີ່ຖືກຕ້ອງແລ້ວສົ່ງຄືນໃໝ່',
+                  'ກະລຸນາແກ້ໄຂຂໍ້ມູນທີ່ຖືກຕ້ອງແລ້ວອັບເດດຄືນໃໝ່',
                   style: TextStyle(fontSize: 12, color: AppColors.kMuted),
                 ),
               ],

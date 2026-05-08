@@ -5,10 +5,7 @@ import 'dart:io';
 import '../../../widgets/custom_button.dart';
 import '../../../services/profile_service.dart';
 import '../../../services/auth_service.dart';
-import '../../../services/kyc_gate_service.dart';
-import '../../../services/kyc_service.dart';
 import '../../../models/app_models.dart';
-import '../../../models/kyc_status.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -28,10 +25,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _dobController = TextEditingController();
   final _phoneController = TextEditingController();
   String? _selectedGender;
-
-  // ✅ KYC state
-  KycStatus _kycStatus = KycStatus.none;
-  KycExistingData? _kycExisting;
 
   @override
   void initState() {
@@ -62,26 +55,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProfile() async {
     setState(() => _isLoading = true);
 
-    // ✅ ດຶງ KYC status ພ້ອມກັນ
     final results = await Future.wait([
       ProfileService.getProfile(),
       AuthService.instance.getMe(),
-      KycGateService.instance.syncFromBackend().then(
-        (_) => KycGateService.instance.getStatus(),
-      ),
     ]);
 
     final profile = results[0] as ProfileModel?;
     final user = results[1] as UserModel?;
-    final kycStatus = results[2] as KycStatus;
-
-    KycExistingData? kycExisting;
-    if (kycStatus == KycStatus.rejected) {
-      try {
-        final res = await KycService.checkMyStatus();
-        if (res['success'] == true) kycExisting = KycExistingData.fromJson(res);
-      } catch (_) {}
-    }
 
     if (mounted) {
       setState(() {
@@ -97,8 +77,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? profile?.gender
             : null;
 
-        _kycStatus = kycStatus;
-        _kycExisting = kycExisting;
         _isLoading = false;
       });
     }
@@ -176,25 +154,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ✅ ເປີດໜ້າ KYC ສຳລັບ re-submit
-  void _openKycResubmit() {
-    Navigator.of(context).pushNamed(
-      '/kyc',
-      arguments: KycRouteArgs(
-        existingData: _kycExisting,
-        onCompleted: () => _loadProfile(),
-      ),
-    );
-  }
-
-  // ✅ ເປີດໜ້າ KYC ຄັ້ງທຳອິດ
-  void _openKycSubmit() {
-    Navigator.of(context).pushNamed(
-      '/kyc',
-      arguments: KycRouteArgs(onCompleted: () => _loadProfile()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -245,18 +204,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildInfoList(),
-                  const SizedBox(height: 28),
-
-                  // ✅ KYC Section
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'ການຢືນຢັນຕົວຕົນ (KYC)',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildKycSection(),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -264,195 +211,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ✅ KYC Section Widget
-  Widget _buildKycSection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _kycBorderColor, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: _kycIconBg,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(_kycIcon, color: _kycColor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _kycLabel,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _kycColor,
-                      ),
-                    ),
-                    Text(
-                      _kycSubLabel,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF7A8C87),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Status badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: _kycBadgeBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _kycBadgeText,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _kycColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // ✅ Rejection note
-          if (_kycStatus == KycStatus.rejected &&
-              _kycExisting?.reviewNote != null &&
-              _kycExisting!.reviewNote!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAEEDA),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    size: 14,
-                    color: Color(0xFF854F0B),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _kycExisting!.reviewNote!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF854F0B),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // ✅ Action button
-          if (_kycStatus == KycStatus.rejected ||
-              _kycStatus == KycStatus.none) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton.icon(
-                onPressed: _kycStatus == KycStatus.rejected
-                    ? _openKycResubmit
-                    : _openKycSubmit,
-                icon: Icon(
-                  _kycStatus == KycStatus.rejected
-                      ? Icons.edit_note_rounded
-                      : Icons.verified_user_outlined,
-                  size: 18,
-                ),
-                label: Text(
-                  _kycStatus == KycStatus.rejected
-                      ? 'ແກ້ໄຂ & ສົ່ງ KYC ຄືນໃໝ່'
-                      : 'ເລີ່ມຢືນຢັນຕົວຕົນ',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kycStatus == KycStatus.rejected
-                      ? const Color(0xFFD94040)
-                      : const Color(0xFF1D9E75),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── KYC helpers ──────────────────────────────────────────────────────────
-  Color get _kycColor => switch (_kycStatus) {
-    KycStatus.verified => const Color(0xFF1D9E75),
-    KycStatus.submitted => const Color(0xFFBA7517),
-    KycStatus.rejected => const Color(0xFFD94040),
-    _ => const Color(0xFF7A8C87),
-  };
-
-  Color get _kycBorderColor => _kycColor.withValues(alpha: 0.25);
-  Color get _kycIconBg => _kycColor.withValues(alpha: 0.10);
-  Color get _kycBadgeBg => _kycColor.withValues(alpha: 0.10);
-
-  IconData get _kycIcon => switch (_kycStatus) {
-    KycStatus.verified => Icons.verified_user_rounded,
-    KycStatus.submitted => Icons.hourglass_top_rounded,
-    KycStatus.rejected => Icons.gpp_bad_outlined,
-    _ => Icons.verified_user_outlined,
-  };
-
-  String get _kycLabel => switch (_kycStatus) {
-    KycStatus.verified => 'ຢືນຢັນຕົວຕົນສຳເລັດ',
-    KycStatus.submitted => 'ກຳລັງກວດສອບ',
-    KycStatus.rejected => 'KYC ຖືກປະຕິເສດ',
-    _ => 'ຍັງບໍ່ຢືນຢັນຕົວຕົນ',
-  };
-
-  String get _kycSubLabel => switch (_kycStatus) {
-    KycStatus.verified => 'ໂອນເງິນໄດ້ໂດຍບໍ່ຈຳກັດ',
-    KycStatus.submitted => 'ໃຊ້ເວລາ 1–3 ວັນທຳການ',
-    KycStatus.rejected => 'ກະລຸນາແກ້ໄຂ ແລະ ສົ່ງຄືນ',
-    _ => 'ຕ້ອງ KYC ກ່ອນໂອນເກີນ limit',
-  };
-
-  String get _kycBadgeText => switch (_kycStatus) {
-    KycStatus.verified => 'Verified',
-    KycStatus.submitted => 'Pending',
-    KycStatus.rejected => 'Rejected',
-    _ => 'None',
-  };
-
-  // ── Profile helpers ───────────────────────────────────────────────────────
   void _showEditProfileModal() {
     showModalBottomSheet(
       context: context,
