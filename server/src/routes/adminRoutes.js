@@ -507,7 +507,7 @@ router.delete('/expenses/:id', protect, adminOnly, async (req, res) => {
 })
 
 // ── GET /api/admin/report/top-users ──────────────────────────────────────
-router.get('/report/top-users', protect, adminOnly, async (req, res) => {
+router.get('/report/top-users', protect, staffOrAdmin, async (req, res) => {
   try {
     const { from, to, limit = 10 } = req.query
     const fromDate = from ? new Date(from) : new Date(new Date().setMonth(new Date().getMonth() - 6))

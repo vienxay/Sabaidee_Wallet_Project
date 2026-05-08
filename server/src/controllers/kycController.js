@@ -74,7 +74,6 @@ exports.submitKyc = async (req, res) => {
             `kyc/${userId}/idFront`
         );
 
-        // ✅ ແກ້ທີ 1 — upload selfie ຖ້າມີ
         let selfieUrl = null;
         if (req.files?.selfie?.[0]) {
             const selfieResult = await uploadToCloudinary(
@@ -84,25 +83,40 @@ exports.submitKyc = async (req, res) => {
             selfieUrl = selfieResult.secure_url;
         }
 
-        // ── Save Kyc document ───────────────────────────────────────────────
-        const referenceId = genRefId();
-        const kyc = await Kyc.create({
-            user:           userId,
-            fullName,
-            gender,
-            dob:            new Date(dob),
-            nationality,
-            email:          req.user.email,
-            passportNumber: passportNumber.toUpperCase(),
-            expiryDate:     new Date(expiryDate),
-            idFrontUrl:     frontResult.secure_url,
-            selfieUrl,                                  // ✅ ເພີ່ມ selfieUrl
-            consentData:    true,
-            consentPdpa:    req.body.consentPdpa === 'true',
-            referenceId,
-            status:         'pending',
-            submittedAt:    new Date(),
-        });
+        // ── Upsert Kyc document ─────────────────────────────────────────────
+        // ✅ ໃຊ້ findOneAndUpdate + upsert ແທນ create()
+        //    ເພື່ອຮອງຮັບກໍລະນີ user ສົ່ງ KYC ຄືນຫຼັງຈາກຖືກ rejected
+        //    $set      → ອັບເດດທຸກຄັ້ງ
+        //    $setOnInsert → ຕັ້ງຄ່າຄັ້ງດຽວຕອນສ້າງໃໝ່ (ປ້ອງກັນ referenceId duplicate)
+        const kyc = await Kyc.findOneAndUpdate(
+            { user: userId },
+            {
+                $set: {
+                    fullName,
+                    gender,
+                    dob:            new Date(dob),
+                    nationality,
+                    email:          req.user.email,
+                    passportNumber: passportNumber.toUpperCase(),
+                    expiryDate:     new Date(expiryDate),
+                    idFrontUrl:     frontResult.secure_url,
+                    selfieUrl,
+                    consentData:    true,
+                    consentPdpa:    req.body.consentPdpa === 'true',
+                    status:         'pending',
+                    reviewNote:     null,
+                    reviewedBy:     null,
+                    reviewedAt:     null,
+                    submittedAt:    new Date(),
+                },
+                $setOnInsert: {
+                    // referenceId ຕັ້ງຄ່າຄັ້ງດຽວຕອນສ້າງ document ໃໝ່
+                    // ບໍ່ overwrite ຄ່າເກົ່າເວລາ re-submit
+                    referenceId: genRefId(),
+                },
+            },
+            { new: true, upsert: true, runValidators: true }
+        );
 
         // ── Update User ─────────────────────────────────────────────────────
         await User.findByIdAndUpdate(userId, {
@@ -161,7 +175,6 @@ exports.reviewKyc = async (req, res) => {
             return res.status(404).json({ success: false, message: 'ບໍ່ພົບ User' });
         }
 
-        // ✅ ແກ້ທີ 2 — ກວດ KYC ກ່ອນ review
         const kyc = await Kyc.findOne({ user: user._id });
         if (!kyc) {
             return res.status(404).json({ success: false, message: 'ບໍ່ພົບ KYC ຂອງ User ນີ້' });
@@ -216,7 +229,6 @@ exports.listKyc = async (req, res) => {
     try {
         const { status } = req.query;
 
-        // ✅ ແກ້ທີ 3 — convert page/limit ເປັນ Number ກ່ອນໃຊ້
         const pageNum  = Number(req.query.page)  || 1;
         const limitNum = Number(req.query.limit) || 20;
 
