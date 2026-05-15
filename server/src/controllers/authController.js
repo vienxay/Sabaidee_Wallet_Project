@@ -182,7 +182,8 @@ exports.logout = (req, res) => {
 exports.googleCallback = async (req, res) => {
     try {
         const token = generateToken(req.user._id);
-        const redirectUrl = `${process.env.FRONTEND_URL}/auth/callback?token=${token}`;
+        // sabaidee://auth + /callback = sabaidee://auth/callback
+        const redirectUrl = `${process.env.FRONTEND_URL}/callback?token=${token}`;
         res.redirect(redirectUrl);
     } catch (error) {
         console.error('Google Callback Error:', error);

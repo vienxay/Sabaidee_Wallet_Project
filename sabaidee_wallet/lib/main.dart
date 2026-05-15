@@ -119,9 +119,11 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     if (uri.scheme != 'sabaidee') return;
 
     // ─── Google OAuth callback ────────────────────────────────────────────
-    // ຕ້ອງ handle ກ່ອນ isLoggedIn check ເພາະ token ຍັງບໍ່ຖືກ save ເທື່ອ
     // URL pattern: sabaidee://auth/callback?token=JWT
-    if (uri.host == 'auth' && uri.path == '/callback') {
+    //   host = 'auth', path = '/callback'
+    // ຕ້ອງ handle ກ່ອນ isLoggedIn check ເພາະ token ຍັງບໍ່ຖືກ save ເທື່ອ
+    if (uri.host == 'auth' &&
+        (uri.path == '/callback' || uri.path == '/auth/callback')) {
       final token = uri.queryParameters['token'];
       if (token == null || token.isEmpty) return;
 
