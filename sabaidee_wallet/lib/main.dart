@@ -118,6 +118,33 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
   void _handleLink(Uri uri) async {
     if (uri.scheme != 'sabaidee') return;
 
+    // ─── Google OAuth callback ────────────────────────────────────────────
+    // ຕ້ອງ handle ກ່ອນ isLoggedIn check ເພາະ token ຍັງບໍ່ຖືກ save ເທື່ອ
+    // URL pattern: sabaidee://auth/callback?token=JWT
+    if (uri.host == 'auth' && uri.path == '/callback') {
+      final token = uri.queryParameters['token'];
+      if (token == null || token.isEmpty) return;
+
+      // 1. save token ກ່ອນ
+      await StorageService.instance.saveToken(token);
+
+      // 2. fetch user ຈາກ server ດ້ວຍ token ໃໝ່
+      final user = await AuthService.instance.getMe();
+      if (user != null) {
+        await StorageService.instance.saveUser(user);
+        SessionTimeoutService.instance.onUserActivity();
+        KycGateService.instance.syncFromBackend();
+      }
+
+      // 3. navigate ໄປ home
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/home',
+        (_) => false,
+      );
+      return;
+    }
+
+    // ─── Other deep links — ຕ້ອງ login ກ່ອນ ─────────────────────────────
     final isLoggedIn = await AuthService.instance.isLoggedIn();
     if (!isLoggedIn) {
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
