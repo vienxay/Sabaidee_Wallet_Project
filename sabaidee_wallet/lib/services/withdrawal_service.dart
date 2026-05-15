@@ -1,7 +1,9 @@
-// ─── lib/services/withdrawal_service.dart ────────────────────────────────────
+// ຈັດການການຖອນ sats ອອກ:
+//   preview  → ກວດ limit + ຄຳນວນ sats ກ່ອນຖອນ (ບໍ່ຖອນຈິງ)
+//   send     → ຖອນຈິງ ຜ່ານ LNBits → Lightning Network
+// ຮອງຮັບ destination: Lightning Address, LNURL, BOLT11 invoice
 import '../core/core.dart';
 import 'api_client.dart';
-import '../core/wallet_result.dart';
 
 class WithdrawalService {
   WithdrawalService._();
@@ -9,7 +11,7 @@ class WithdrawalService {
 
   final _api = ApiClient.instance;
 
-  // ── GET /api/withdrawal/limit-status ──────────────────────────────────────
+  // ດຶງວົງເງິນຖອນ: per-tx limit, daily limit, ຍອດໃຊ້ໄປແລ້ວ, ຍອດຄົງເຫຼືອ
   Future<WalletResult<WithdrawalLimitModel>> getLimitStatus() async {
     final res = await _api.get(AppConstants.withdrawalLimitStatus);
     if (res.success && res.data != null) {
@@ -18,14 +20,15 @@ class WithdrawalService {
     return WalletResult.failure(res.message);
   }
 
-  // ── POST /api/withdrawal/preview ──────────────────────────────────────────
+  // ສະຫຼຸບກ່ອນຖອນ: ກວດ limit, ຄຳນວນ LAK→sats, ຄ່າ fee estimate
+  // ໃຊ້ສະແດງໃນ confirm screen ກ່ອນ user ກົດ "ຢືນຢັນ"
   Future<WalletResult<WithdrawalPreviewModel>> preview({
     required String destination,
     required int amountLAK,
   }) async {
     final res = await _api.post(AppConstants.withdrawalPreview, {
       'destination': destination,
-      'amountLAK': amountLAK,
+      'amountLAK':   amountLAK,
     });
 
     if (res.success && res.data != null) {
@@ -37,7 +40,8 @@ class WithdrawalService {
     return WalletResult.failure(res.message);
   }
 
-  // ── POST /api/withdrawal/send ─────────────────────────────────────────────
+  // ຖອນຈິງ — server ສົ່ງ Lightning payment ຜ່ານ LNBits
+  // ຄວນ call preview() ກ່ອນສະເໝີ ເພື່ອ confirm ກັບ user
   Future<WalletResult<Map<String, dynamic>>> send({
     required String destination,
     required int amountLAK,
@@ -45,8 +49,8 @@ class WithdrawalService {
   }) async {
     final res = await _api.post(AppConstants.withdrawalSend, {
       'destination': destination,
-      'amountLAK': amountLAK,
-      'memo': memo,
+      'amountLAK':   amountLAK,
+      'memo':        memo,
     });
 
     if (res.success) {
@@ -59,18 +63,17 @@ class WithdrawalService {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Models
-// ════════════════════════════════════════════════════════════════════════════
+// ─── Models ───────────────────────────────────────────────────────────────────
 
+// ວົງເງິນຖອນ + ຍອດໃຊ້ປະຈຸວັນ
 class WithdrawalLimitModel {
   final bool isKYCVerified;
   final int balanceSats;
-  final int perTxLimit;
-  final int dailyLimit;
-  final int todayWithdrawn;
-  final int remaining;
-  final int percentage;
+  final int perTxLimit;       // ສູງສຸດຕໍ່ transaction (LAK)
+  final int dailyLimit;       // ສູງສຸດຕໍ່ມື້ (LAK)
+  final int todayWithdrawn;   // ຖອນໄປແລ້ວວັນນີ້ (LAK)
+  final int remaining;        // ຍັງຖອນໄດ້ (LAK)
+  final int percentage;       // % ທີ່ໃຊ້ໄປ (0-100)
 
   const WithdrawalLimitModel({
     required this.isKYCVerified,
@@ -85,21 +88,22 @@ class WithdrawalLimitModel {
   factory WithdrawalLimitModel.fromJson(Map<String, dynamic> j) =>
       WithdrawalLimitModel(
         isKYCVerified: j['isKYCVerified'] ?? false,
-        balanceSats: j['balanceSats'] ?? 0,
-        perTxLimit: j['perTxLimit'] ?? 500000,
-        dailyLimit: j['dailyLimit'] ?? 1000000,
+        balanceSats:   j['balanceSats']   ?? 0,
+        perTxLimit:    j['perTxLimit']    ?? 500000,
+        dailyLimit:    j['dailyLimit']    ?? 1000000,
         todayWithdrawn: j['todayWithdrawn'] ?? 0,
-        remaining: j['remaining'] ?? 0,
-        percentage: j['percentage'] ?? 0,
+        remaining:     j['remaining']     ?? 0,
+        percentage:    j['percentage']    ?? 0,
       );
 }
 
+// ຂໍ້ມູນສະຫຼຸບກ່ອນຖອນ — ສະແດງໃຫ້ user confirm
 class WithdrawalPreviewModel {
-  final String destinationType; // 'address' | 'invoice'
+  final String destinationType;  // 'address' | 'lnurl' | 'invoice'
   final String destination;
   final int amountLAK;
   final int amountSats;
-  final int estimatedFeeSats;
+  final int estimatedFeeSats;    // ~0.1% estimate
   final int balanceSats;
   final double btcToLAK;
   final int perTxLimit;
@@ -123,19 +127,19 @@ class WithdrawalPreviewModel {
 
   factory WithdrawalPreviewModel.fromJson(Map<String, dynamic> j) {
     final limits = j['limits'] as Map<String, dynamic>? ?? {};
-    final rate = j['rate'] as Map<String, dynamic>? ?? {};
+    final rate   = j['rate']   as Map<String, dynamic>? ?? {};
     return WithdrawalPreviewModel(
       destinationType: j['destinationType'] ?? 'address',
-      destination: j['destination'] ?? '',
-      amountLAK: j['amountLAK'] ?? 0,
-      amountSats: j['amountSats'] ?? 0,
+      destination:     j['destination']     ?? '',
+      amountLAK:       j['amountLAK']       ?? 0,
+      amountSats:      j['amountSats']      ?? 0,
       estimatedFeeSats: j['estimatedFeeSats'] ?? 0,
-      balanceSats: j['balanceSats'] ?? 0,
-      btcToLAK: (rate['btcToLAK'] ?? 0).toDouble(),
-      perTxLimit: limits['perTx'] ?? 500000,
-      dailyLimit: limits['daily'] ?? 1000000,
-      todayWithdrawn: limits['todayWithdrawn'] ?? 0,
-      remaining: limits['remaining'] ?? 0,
+      balanceSats:     j['balanceSats']     ?? 0,
+      btcToLAK:        (rate['btcToLAK']    ?? 0).toDouble(),
+      perTxLimit:      limits['perTx']      ?? 500000,
+      dailyLimit:      limits['daily']      ?? 1000000,
+      todayWithdrawn:  limits['todayWithdrawn'] ?? 0,
+      remaining:       limits['remaining']  ?? 0,
     );
   }
 }

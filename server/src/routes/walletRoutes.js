@@ -1,3 +1,5 @@
+// Wallet Routes — ຈັດການ wallet: balance, rate, topup, withdraw
+// ທຸກ route ຕ້ອງ login (protect middleware)
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
 const {

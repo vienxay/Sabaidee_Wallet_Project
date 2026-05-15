@@ -1,7 +1,10 @@
+// Input Validation Middleware — ກວດ request body ກ່ອນ controller
+// ໃຊ້ express-validator library
 // ─── middleware/validateMiddleware.js ────────────────────────────────────────
 const { body, validationResult } = require('express-validator');
 
-// ── Helper: ດຶງ error ທຳອິດແລ້ວສົ່ງກັບ ────────────────────────────────────────
+// ── Helper: ດຶງ error ທຳອິດ ແລ້ວ return 400 ───────────────────────────────────
+// ວາງໄວ້ທ້າຍ array validators ສະເໝີ: [...validators, validate]
 const validate = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -50,8 +53,7 @@ exports.validatePayInvoice = [
 exports.validateLaoQRPay = [
     body('amountLAK')
         .notEmpty().withMessage('ກະລຸນາໃສ່ຈຳນວນເງິນ')
-        .isInt({ min: 1_000     }).withMessage('ຈຳນວນເງິນຕ້ອງຢ່າງໜ້ອຍ 1,000 ກີບ')
-        .isInt({ max: 2_000_000 }).withMessage('ຈຳນວນເງິນສູງສຸດ 2,000,000 ກີບ/ຄັ້ງ'),
+        .isInt({ min: 1_000, max: 2_000_000 }).withMessage('ຈຳນວນເງິນຕ້ອງຢູ່ລະຫວ່າງ 1,000 – 2,000,000 ກີບ'),
 
     body('merchantName')
         .optional()

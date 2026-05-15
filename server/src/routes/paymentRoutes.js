@@ -1,3 +1,6 @@
+// Payment Routes — ຈ່າຍ Lightning, LNURL, LAO QR
+// ທຸກ route ຜ່ານ protect middleware (line router.use(protect))
+// validateMiddleware ກວດ input ກ່ອນ controller
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
 const {

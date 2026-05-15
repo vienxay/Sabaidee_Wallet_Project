@@ -91,7 +91,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             ),
           );
         } else {
-          _showError(sendResult.message ?? 'ຖອນເງິນບໍ່ສຳເລັດ');
+          _showError(sendResult.message.isNotEmpty ? sendResult.message : 'ຖອນເງິນບໍ່ສຳເລັດ');
         }
       } else {
         // ✅ ສະແດງ error ຕົງໆ — ບໍ່ຕ້ອງ KYC ສຳລັບການຖອນ

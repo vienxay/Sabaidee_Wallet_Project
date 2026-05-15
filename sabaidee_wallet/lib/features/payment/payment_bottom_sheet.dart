@@ -1,10 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
 
-import '../../core/app_constants.dart';
+import '../../services/payment_service.dart';
 import 'payment_error_dialog.dart';
 import 'payment_success_screen.dart';
 
@@ -45,93 +41,49 @@ class PaymentBottomSheet extends StatefulWidget {
 class _PaymentBottomSheetState extends State<PaymentBottomSheet> {
   bool _isLoading = false;
 
-  Future<String?> _getToken() async {
-    const storage = FlutterSecureStorage();
-    return await storage.read(key: AppConstants.tokenKey);
-  }
-
   Future<void> _handleSend() async {
     final rootNav = Navigator.of(context, rootNavigator: true);
     final localNav = Navigator.of(context);
 
     setState(() => _isLoading = true);
 
-    try {
-      final token = await _getToken();
-      if (token == null) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        localNav.pop();
-        await PaymentErrorDialog.show(
-          rootNav.context,
-          errorInfo: const PaymentErrorInfo(
-            type: PaymentErrorType.general,
-            message: 'Session expired. Please log in again.',
-          ),
-          onRetry: () =>
-              rootNav.pushNamedAndRemoveUntil('/login', (_) => false),
-        );
-        return;
-      }
+    final result = await PaymentService.instance.pay(
+      paymentRequest: widget.paymentRequest,
+      amountSats: widget.amountSats > 0 ? widget.amountSats : null,
+      memo: widget.description,
+    );
 
-      final res = await http.post(
-        Uri.parse('${AppConstants.apiBaseUrl}${AppConstants.paymentPay}'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: jsonEncode({
-          'paymentRequest': widget.paymentRequest,
-          'amount': widget.amountSats,
-        }),
-      );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      if (res.statusCode == 200 && body['success'] == true) {
-        final payment = body['payment'] as Map<String, dynamic>? ?? {};
-        localNav.pop();
-
-        showModalBottomSheet(
-          context: rootNav.context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => PaymentSuccessSheet(
-            senderName: 'Sabaidee Wallet',
-            receiverName:
-                widget.description.isNotEmpty ? widget.description : 'Receiver',
-            amountLAK: ((payment['amountLAK'] ?? 0) as num).toDouble(),
-            amountSats: widget.amountSats,
-            feeLAK: (payment['feeLAK'] ?? 0) as int,
-            memo: widget.description,
-            closeToHome: false,
-          ),
-        );
-      } else {
-        localNav.pop();
-        await PaymentErrorDialog.show(
-          rootNav.context,
-          errorInfo: PaymentErrorInfo.fromApiResponse(body),
-          onRetry: _handleSend,
-          onGoToKYC: () => rootNav.pushNamed('/kyc'),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+    if (result.success) {
+      final payment = result.data ?? {};
       localNav.pop();
-
+      showModalBottomSheet(
+        context: rootNav.context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => PaymentSuccessSheet(
+          senderName: 'Sabaidee Wallet',
+          receiverName:
+              widget.description.isNotEmpty ? widget.description : 'Receiver',
+          amountLAK: ((payment['amountLAK'] ?? 0) as num).toDouble(),
+          amountSats: widget.amountSats,
+          feeLAK: (payment['feeLAK'] ?? 0) as int,
+          memo: widget.description,
+          closeToHome: false,
+        ),
+      );
+    } else {
+      localNav.pop();
       await PaymentErrorDialog.show(
         rootNav.context,
-        errorInfo: const PaymentErrorInfo(
-          type: PaymentErrorType.network,
-          message: 'Unable to reach the server.\nPlease check your internet.',
-        ),
+        errorInfo: PaymentErrorInfo.fromApiResponse({
+          'message': result.message,
+          'requireKYC': result.requireKYC,
+        }),
         onRetry: _handleSend,
+        onGoToKYC: () => rootNav.pushNamed('/kyc'),
       );
     }
   }

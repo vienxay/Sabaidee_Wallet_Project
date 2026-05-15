@@ -1,12 +1,16 @@
-// lib/services/kyc_gate_service.dart
+// ຄວບຄຸມ KYC Gate — ກວດ limit ແລ້ວ block/allow ການຈ່າຍ
+// ເກັບ KYC status ໄວ້ local (SharedPreferences) ເພື່ອໃຊ້ offline ໄດ້
+// ຕ້ອງ syncFromBackend() ທຸກຄັ້ງທີ່ app ເປີດ ຫຼື user ກັບ home
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/kyc_status.dart';
 import 'kyc_service.dart';
 import 'storage_service.dart';
-import 'daily_limit_service.dart';
 
+// ວົງເງິນຕໍ່ມື້ຂອງ user ທີ່ຍັງບໍ່ KYC
 const double kKycDailyLimit = 5_000_000;
+
+// key ສຳລັບ SharedPreferences — v1 suffix ໃຊ້ migration ຖ້າ format ປ່ຽນ
 const _kStatus = 'user_kyc_status_v1';
 
 // ─── Route Args ───────────────────────────────────────────────────────────────
@@ -65,6 +69,8 @@ class KycExistingData {
 }
 
 // ─── KycGateService ───────────────────────────────────────────────────────────
+// ໃຊ້ງານ: KycGateService.instance.checkAndGate(context, amount, callback)
+// ຖ້າ return true = ຜ່ານ gate, ຖ້າ false = ສະແດງ dialog/sheet ແລ້ວ block
 class KycGateService {
   KycGateService._();
   static final instance = KycGateService._();
@@ -81,6 +87,8 @@ class KycGateService {
   Future<void> clearStatus() async => StorageService.instance.remove(_kStatus);
 
   // ── Sync ຈາກ backend ──────────────────────────────────────────────────────
+  // ດຶງ KYC status ລ່າສຸດຈາກ server ແລ້ວ save ລົງ local
+  // ຄວນ call ຕອນ: app launch, ກັບ home screen, ຫຼັງ KYC submit
   Future<void> syncFromBackend() async {
     final res = await KycService.checkMyStatus();
     if (res['success'] == true) {
@@ -92,15 +100,18 @@ class KycGateService {
   }
 
   // ── Gate ──────────────────────────────────────────────────────────────────
+  // ກວດ amount ທຽບກັບ limit ຕາມ KYC status:
+  //   unverified: 2M LAK/ມື້, verified: 100M LAK/ມື້ (demo limit)
+  // ຖ້າ amount ເກີນ → ສະແດງ sheet ທີ່ເໝາະສົມ ຕາມ KYC state
   Future<bool> checkAndGate({
     required BuildContext context,
     required double amount,
     required VoidCallback onKycCompleted,
   }) async {
-    final limit = await DailyLimitService.instance.getDailyLimit();
+    final status = await getStatus();
+    final limit = status.isVerified ? 100_000_000.0 : 2_000_000.0;
     if (amount <= limit) return true;
 
-    final status = await getStatus();
     if (!context.mounted) return false;
 
     if (status.isVerified) return true;

@@ -1,5 +1,5 @@
-// lib/services/auth_service.dart
-// lib/services/auth_service.dart
+// ຈັດການ Authentication ທັງໝົດ: register, login, logout, token check
+// ໃຊ້ singleton pattern — AuthService.instance
 import 'dart:convert';
 import '../core/app_constants.dart';
 import '../models/app_models.dart';
@@ -13,15 +13,12 @@ class AuthService {
 
   final _api = ApiClient.instance;
 
-  // ✅ ດຶງ token (public method)
-  Future<String?> getToken() async {
-    return StorageService.instance.getToken();
-  }
+  // ─── Token ────────────────────────────────────────────────────────────────
+  Future<String?> getToken() async => StorageService.instance.getToken();
+  Future<String?> _token()   async => getToken();
 
-  // ແທນທີ່ _token() ເກົ່າ
-  Future<String?> _token() async => getToken();
-
-  // ─── Register ──────────────────────────────────────────────────────────────
+  // ─── Register ────────────────────────────────────────────────────────────
+  // ສ້າງ account ໃໝ່ + LNBits wallet ໂດຍອັດຕະໂນມັດ
   Future<AuthResult> register({
     required String walletName,
     required String email,
@@ -29,9 +26,9 @@ class AuthService {
   }) async {
     final res = await _api.post(AppConstants.authRegister, {
       'walletName': walletName,
-      'email': email,
-      'password': password,
-    }, auth: false);
+      'email':      email,
+      'password':   password,
+    }, auth: false); // auth=false ເພາະຍັງບໍ່ມີ token
 
     if (res.success && res.data != null) {
       return AuthResult.success(UserModel.fromJson(res.data!['user']));
@@ -42,13 +39,14 @@ class AuthService {
     );
   }
 
-  // ─── Login ─────────────────────────────────────────────────────────────────
+  // ─── Login ────────────────────────────────────────────────────────────────
+  // login ສຳເລັດ → save token + user ໄວ້ storage → return UserModel
   Future<AuthResult> login({
     required String email,
     required String password,
   }) async {
     final res = await _api.post(AppConstants.authLogin, {
-      'email': email,
+      'email':    email,
       'password': password,
     }, auth: false);
 
@@ -62,7 +60,9 @@ class AuthService {
     );
   }
 
-  // ─── isLoggedIn ─────────────────────────────────────────────────
+  // ─── isLoggedIn ───────────────────────────────────────────────────────────
+  // ກວດ JWT token locally ໂດຍບໍ່ call API — ໄວກວ່າ ແລະ ໃຊ້ offlineໄດ້
+  // decode payload → ກວດ exp field → ຖ້າ ໝົດອາຍຸ clear token ທັນທີ
   Future<bool> isLoggedIn() async {
     final token = await StorageService.instance.getToken();
     if (token == null || token.isEmpty) return false;
@@ -74,6 +74,7 @@ class AuthService {
         return false;
       }
 
+      // JWT ປະກອບດ້ວຍ 3 ສ່ວນ: header.payload.signature (base64url encoded)
       final payload = jsonDecode(
         utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
       );
@@ -84,13 +85,13 @@ class AuthService {
         return false;
       }
 
+      // exp ຢູ່ໃນຮູບ Unix timestamp (ວິນາທີ) → ປ່ຽນເປັນ DateTime
       final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
       if (DateTime.now().isAfter(expiry)) {
         await StorageService.instance.clearAll();
         return false;
       }
 
-      // ✅ JWT valid → return true ເລີຍ ບໍ່ຕ້ອງ call API ຊ້ຳ
       return true;
     } catch (_) {
       await StorageService.instance.clearAll();
@@ -98,8 +99,8 @@ class AuthService {
     }
   }
 
-  // ─── Get Me ────────────────────────────────────────────────────────────────
-
+  // ─── Get Me ───────────────────────────────────────────────────────────────
+  // ດຶງ user ຂໍ້ມູນລ່າສຸດຈາກ server (ໃຊ້ຕອນ app ເລີ່ມ)
   Future<UserModel?> getMe() async {
     try {
       final token = await _token();
@@ -107,7 +108,6 @@ class AuthService {
 
       final res = await _api.get(AppConstants.authMe);
 
-      // ✅ ແກ້ໄຂ: ຖ້າ 401 ຕ້ອງ clear token ແລະ return null
       if (res.statusCode == 401) {
         debugPrint('🔑 Token expired/invalid - clearing...');
         await StorageService.instance.clearAll();
@@ -124,7 +124,9 @@ class AuthService {
     }
   }
 
-  // ─── Logout ────────────────────────────────────────────────────────────────
+  // ─── Logout ───────────────────────────────────────────────────────────────
+  // ແຈ້ງ server (fire-and-forget) ແລ້ວ clear local storage ທັນທີ
+  // ໄດ້ຮັບ network error ກໍ logout ຍ້ອນ clearAll ຢູ່ outside try
   Future<void> logout() async {
     try {
       await _api.post(AppConstants.authLogout, {});
@@ -132,41 +134,41 @@ class AuthService {
     await StorageService.instance.clearAll();
   }
 
-  // ─── Forgot Password ───────────────────────────────────────────────────────
+  // ─── Password Reset Flow ──────────────────────────────────────────────────
+  // ຂັ້ນຕອນ: forgotPassword → verifyOTP → resetPassword
+
   Future<ServiceResult> forgotPassword(String email) async {
-    final res = await _api.post(AppConstants.authForgotPass, {
-      'email': email,
-    }, auth: false);
+    final res = await _api.post(
+      AppConstants.authForgotPass, {'email': email}, auth: false,
+    );
     return ServiceResult(success: res.success, message: res.message);
   }
 
-  // ─── Verify OTP ────────────────────────────────────────────────────────────
   Future<ServiceResult> verifyOTP({
     required String email,
     required String otp,
   }) async {
-    final res = await _api.post(AppConstants.authVerifyOtp, {
-      'email': email,
-      'otp': otp,
-    }, auth: false);
+    final res = await _api.post(
+      AppConstants.authVerifyOtp, {'email': email, 'otp': otp}, auth: false,
+    );
     return ServiceResult(success: res.success, message: res.message);
   }
 
-  // ─── Reset Password ────────────────────────────────────────────────────────
   Future<ServiceResult> resetPassword({
     required String email,
     required String otp,
     required String newPassword,
   }) async {
-    final res = await _api.post(AppConstants.authResetPass, {
-      'email': email,
-      'otp': otp,
-      'newPassword': newPassword,
-    }, auth: false);
+    final res = await _api.post(
+      AppConstants.authResetPass,
+      {'email': email, 'otp': otp, 'newPassword': newPassword},
+      auth: false,
+    );
     return ServiceResult(success: res.success, message: res.message);
   }
 
-  // ─── Save Session ──────────────────────────────────────────────────────────
+  // ─── Save Session ────────────────────────────────────────────────────────
+  // ບັນທຶກ token (FlutterSecureStorage) ແລະ user (SharedPreferences) ຫຼັງ login
   Future<void> _saveSession(Map<String, dynamic> data) async {
     if (data['token'] != null) {
       await StorageService.instance.saveToken(data['token']);
@@ -191,6 +193,7 @@ class AuthResult {
       AuthResult._(success: false, message: msg);
 }
 
+// ຜົນລັບ simple ສຳລັບ password reset flow
 class ServiceResult {
   final bool success;
   final String message;

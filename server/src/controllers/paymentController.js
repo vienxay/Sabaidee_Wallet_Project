@@ -3,74 +3,22 @@ const Transaction = require('../models/Transaction');
 const Kyc = require('../models/Kyc');
 const lnbits = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
-const axios = require('axios');
+const {
+    isLightningAddress,
+    isLNURL,
+    decodeLNURL,
+    fetchInvoiceFromLNURL,
+    fetchInvoiceFromAddress,
+} = require('../utils/lightningUtils');
 
 const LIMIT = {
     unverified: { perTx: 500_000, daily: 1_000_000 },
-    verified: { perTx: 5_000_000, daily: 20_000_000 },
+    verified:   { perTx: 5_000_000, daily: 20_000_000 },
 };
 
 const LAO_QR_LIMIT = {
     unverified: 2_000_000,
-    verified: 100_000_000,
-};
-
-const isLightningAddress = (address) =>
-    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(address);
-
-const isLNURL = (str) =>
-    str.toUpperCase().startsWith('LNURL');
-
-// ✅ decode + fetch ຢູ່ນີ້ເລີຍ ບໍ່ຕ້ອງ import ຈາກ withdrawalController
-const decodeLNURL = (lnurl) => {
-    const bech32 = require('bech32');
-    const decoded = bech32.bech32.decode(lnurl, 2000);
-    const bytes   = bech32.bech32.fromWords(decoded.words);
-    return Buffer.from(bytes).toString('utf8');
-};
-
-const fetchInvoiceFromLNURL = async (lnurl, amountSats) => {
-    const url = decodeLNURL(lnurl);
-    const { data: meta } = await axios.get(url, { timeout: 10_000 });
-    if (meta.tag !== 'payRequest') throw new Error('ບໍ່ຮອງຮັບ LNURL ນີ້');
-
-    const amountMsats = amountSats * 1000;
-    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
-        const minS = Math.ceil(meta.minSendable / 1000);
-        const maxS = Math.floor(meta.maxSendable / 1000);
-        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
-    }
-
-    const { data: inv } = await axios.get(
-        `${meta.callback}?amount=${amountMsats}`,
-        { timeout: 10_000 }
-    );
-    if (!inv.pr) throw new Error('ບໍ່ສາມາດຂໍ invoice ຈາກ LNURL ໄດ້');
-    return inv.pr;
-};
-
-// ✅ ເພີ່ມ helper ນີ້
-const fetchInvoiceFromAddress = async (address, amountSats) => {
-    const [user, domain] = address.split('@');
-    const { data: meta } = await axios.get(
-        `https://${domain}/.well-known/lnurlp/${user}`,
-        { timeout: 10_000 }
-    );
-    if (meta.tag !== 'payRequest') throw new Error('ບໍ່ຮອງຮັບ Lightning Address ນີ້');
-
-    const amountMsats = amountSats * 1000;
-    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
-        const minS = Math.ceil(meta.minSendable / 1000);
-        const maxS = Math.floor(meta.maxSendable / 1000);
-        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
-    }
-
-    const { data: inv } = await axios.get(
-        `${meta.callback}?amount=${amountMsats}`,
-        { timeout: 10_000 }
-    );
-    if (!inv.pr) throw new Error('ຂໍ invoice ຈາກ Lightning Address ບໍ່ສຳເລັດ');
-    return inv.pr;
+    verified:   100_000_000,
 };
 
 const getStartOfDay = () => {

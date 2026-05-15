@@ -1,9 +1,8 @@
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import '../core/core.dart';
 import '../features/withdraw/withdraw_screen.dart';
+import '../services/auth_service.dart';
 
 class MenuDrawer extends StatefulWidget {
   final int balanceSats;
@@ -47,34 +46,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
   // ─── Logout Logic ──────────────────────────────────────────────────────────
   Future<void> _logout() async {
     setState(() => _isLoggingOut = true);
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(AppConstants.tokenKey);
-
-      if (token != null) {
-        await http
-            .post(
-              Uri.parse('${AppConstants.apiBaseUrl}${AppConstants.authLogout}'),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-            )
-            .timeout(
-              const Duration(seconds: 5),
-              onTimeout: () => http.Response('timeout', 408),
-            );
-      }
-    } catch (_) {
-      // ບໍ່ block logout ຖ້າ network error
-    }
-
-    // ✅ ຍ້າຍ Cleanup + Navigate ອອກຈາກ finally
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(AppConstants.tokenKey);
-    await prefs.remove(AppConstants.userKey);
-
+    await AuthService.instance.logout();
     if (!mounted) return;
     setState(() => _isLoggingOut = false);
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);

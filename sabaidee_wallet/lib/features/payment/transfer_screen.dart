@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'transfer_confirm_screen.dart';
 import 'payment_error_dialog.dart'; // ✅ ເພີ່ມ
 import '../kyc/kyc_screen.dart'; // ✅ ເພີ່ມ
-import '../../services/daily_limit_service.dart';
+import '../../services/payment_service.dart';
 
 class TransferScreen extends StatefulWidget {
   final String senderName;
@@ -38,7 +38,7 @@ class _TransferScreenState extends State<TransferScreen>
   late Animation<Offset> _slideAnim;
 
   int _todaySpent = 0;
-  int _dailyLimit = DailyLimitService.limitUnverified;
+  int _dailyLimit = 2000000;
   bool _limitLoaded = false;
 
   @override
@@ -58,14 +58,17 @@ class _TransferScreenState extends State<TransferScreen>
   }
 
   Future<void> _loadLimit() async {
-    final spent = await DailyLimitService.instance.getTodaySpent();
-    final limit = await DailyLimitService.instance.getDailyLimit();
+    final result = await PaymentService.instance.getLaoQRLimitStatus();
     if (!mounted) return;
-    setState(() {
-      _todaySpent = spent;
-      _dailyLimit = limit;
-      _limitLoaded = true;
-    });
+    if (result.success && result.data != null) {
+      setState(() {
+        _todaySpent = result.data!.todaySpent;
+        _dailyLimit = result.data!.dailyLimit;
+        _limitLoaded = true;
+      });
+    } else {
+      setState(() => _limitLoaded = true);
+    }
   }
 
   @override

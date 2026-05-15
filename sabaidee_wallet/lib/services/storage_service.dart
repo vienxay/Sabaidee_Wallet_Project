@@ -1,4 +1,6 @@
-// lib/services/storage_service.dart
+// ຈັດການ Local Storage 2 ຊັ້ນ:
+//   FlutterSecureStorage → token (encrypt ດ້ວຍ Android Keystore / iOS Keychain)
+//   SharedPreferences    → user data (ຂໍ້ມູນ user ທົ່ວໄປ ບໍ່ sensitive)
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,34 +9,34 @@ import '../core/app_constants.dart';
 import '../models/app_models.dart';
 
 class StorageService {
-  // Singleton Pattern
   StorageService._();
   static final StorageService instance = StorageService._();
 
   SharedPreferences? _prefs;
 
-  // ✅ FIXED FOR v10: ລຶບ aOptions ີ່ deprecated ອກ
-  // ຊ້ default security ທີ່ດີທີ່ສຸດສຳລັບ Android (Android Keystore)
+  // token ເກັບໃນ secure storage — encrypt ດ້ວຍ hardware security
+  // iOS: Keychain (first_unlock_this_device = unlock ເທື່ອດຽວຕໍ່ restart)
+  // Android: Android Keystore
   final _secureStorage = const FlutterSecureStorage(
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
-      // groupId: 'group.com.yourapp.shared', // ເປີດໃຊ້ຖ້າຕ້ອງການ App Groups ໃນ iOS
     ),
-    // webOptions: const WebOptions(), // ເປີດໃຊ້ຖ້າຮັນເທິງ Web
   );
 
-  // ✅ ໃຊ້ AppConstants — single source of truth
   static const _keyToken = AppConstants.tokenKey;
-  static const _keyUser = AppConstants.userKey;
+  static const _keyUser  = AppConstants.userKey;
 
-  // ── Initialize ────────────────────────────────────────────────────────────
+  // ─── Initialize ──────────────────────────────────────────────────────────
+  // ຕ້ອງ call ໃນ main() ກ່ອນ runApp
   Future<void> init() async {
-    if (_prefs != null) return; // ✅ ກັນ init ຊ້ຳ
+    if (_prefs != null) return; // ກັນ init ຊ້ຳ
     _prefs = await SharedPreferences.getInstance();
     debugPrint('✅ StorageService initialized');
   }
 
-  // ── Token (Secure Storage) ────────────────────────────────────────────────
+  // ─── Token (FlutterSecureStorage) ────────────────────────────────────────
+  // token ຕ້ອງໃຊ້ secure storage ເພາະ JWT ທີ່ລັກໄດ້ = ເຂົ້າ account ໄດ້ທັນທີ
+
   Future<void> saveToken(String token) async {
     try {
       await _secureStorage.write(key: _keyToken, value: token);
@@ -63,7 +65,9 @@ class StorageService {
     }
   }
 
-  // ── User (Shared Preferences) ─────────────────────────────────────────────
+  // ─── User (SharedPreferences) ────────────────────────────────────────────
+  // user data ເກັບ JSON string ໃນ SharedPreferences (ບໍ່ sensitive)
+
   Future<void> saveUser(UserModel user) async {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
@@ -79,13 +83,11 @@ class StorageService {
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       final raw = prefs.getString(_keyUser);
-
       if (raw == null || raw.isEmpty) return null;
-
       return UserModel.fromJson(jsonDecode(raw));
     } on FormatException catch (e) {
       debugPrint('❌ Error parsing user JSON: $e');
-      await clearUser(); // ✅ ລົບຂໍ້ມູນເສຍຫາຍ ປ້ອງກັນ Crash
+      await clearUser(); // ລົບຂໍ້ມູນທີ່ເສຍຫາຍ ກັນ crash
       return null;
     } catch (e) {
       debugPrint('❌ Error reading user: $e');
@@ -103,22 +105,18 @@ class StorageService {
     }
   }
 
-  // ── Clear All ─────────────────────────────────────────────────────────────
+  // ─── Clear All ────────────────────────────────────────────────────────────
+  // ເອີ້ນຕອນ logout ຫຼື 401 — clear token + user ພ້ອມກັນ (parallel)
   Future<void> clearAll() async {
-    // ✅ ລໍຖ້າທັງສອງຢ່າງໃຫ້ສຳເລັດແບບ Parallel
-    // ✅ ເພີ່ມຊົ່ວຄາວ — ຫາຕົ້ນຕໍ
     debugPrint('⚠️ clearAll() called from:');
     debugPrintStack(label: 'clearAll stack');
-
     await Future.wait([clearToken(), clearUser()]);
     debugPrint('🧹 All storage cleared');
   }
 
-  // ── Generic Utilities ─────────────────────────────────────────────────────
+  // ─── Generic Utilities ───────────────────────────────────────────────────
   Future<void> setString(String key, String value) async {
-    if (key.isEmpty) {
-      throw Exception('Storage key cannot be empty');
-    }
+    if (key.isEmpty) throw Exception('Storage key cannot be empty');
     try {
       final prefs = _prefs ?? await SharedPreferences.getInstance();
       await prefs.setString(key, value);

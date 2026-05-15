@@ -1,3 +1,5 @@
+// Transaction Routes — ດຶງປະຫວັດ ແລະ ກວດສະຖານະ payment
+// ທຸກ route ຕ້ອງ login (protect middleware)
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
 const {

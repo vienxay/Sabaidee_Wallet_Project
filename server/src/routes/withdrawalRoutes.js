@@ -1,3 +1,5 @@
+// Withdrawal Routes — ຖອນ sats ຜ່ານ Lightning Network
+// Flow: limit-status → preview (ກວດ+ຄຳນວນ) → send (ຖອນຈິງ)
 // ─── routes/withdrawalRoutes.js ─────────────────────────────────────────────
 const express    = require('express');
 const { protect } = require('../middleware/authMiddleware');

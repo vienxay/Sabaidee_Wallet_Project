@@ -18,10 +18,6 @@ const uploadToCloudinary = (buffer, folder) =>
 // POST /api/kyc/submit
 // ─────────────────────────────────────────────────────────────────────────────
 exports.submitKyc = async (req, res) => {
-    console.log('=== KYC Submit ===');
-    console.log('body:', req.body);
-    console.log('files:', req.files);
-
     try {
         const userId = req.user._id;
 

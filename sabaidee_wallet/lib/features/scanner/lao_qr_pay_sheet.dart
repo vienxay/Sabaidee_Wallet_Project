@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import '../../models/app_models.dart';
+import '../../services/payment_service.dart';
 import '../payment/payment_success_screen.dart';
 import 'qr_utils.dart';
-import '../../services/daily_limit_service.dart';
 
 class LaoQRPaySheet extends StatefulWidget {
   final LaoQRInfo qrInfo;
@@ -30,7 +30,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
 
   bool _loading = false;
   int _todaySpent = 0;
-  int _dailyLimit = DailyLimitService.limitUnverified;
+  int _dailyLimit = 2000000;
   bool _limitLoaded = false;
 
   static const _quickAmounts = ['10000', '20000', '50000', '100000'];
@@ -48,14 +48,17 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
   }
 
   Future<void> _loadLimit() async {
-    final spent = await DailyLimitService.instance.getTodaySpent();
-    final limit = await DailyLimitService.instance.getDailyLimit();
+    final result = await PaymentService.instance.getLaoQRLimitStatus();
     if (!mounted) return;
-    setState(() {
-      _todaySpent = spent;
-      _dailyLimit = limit;
-      _limitLoaded = true;
-    });
+    if (result.success && result.data != null) {
+      setState(() {
+        _todaySpent = result.data!.todaySpent;
+        _dailyLimit = result.data!.dailyLimit;
+        _limitLoaded = true;
+      });
+    } else {
+      setState(() => _limitLoaded = true);
+    }
   }
 
   int get _remaining => _dailyLimit - _todaySpent;
@@ -72,43 +75,49 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
     final amount = int.tryParse(_amountCtrl.text.trim().replaceAll(',', ''));
     if (amount == null || amount <= 0) return;
 
-    // ✅ ເກັບ navigator ກ່ອນ await
     final rootNav = Navigator.of(context, rootNavigator: true);
     final localNav = Navigator.of(context);
 
     setState(() => _loading = true);
 
-    final check = await DailyLimitService.instance.canPay(amount);
+    final result = await PaymentService.instance.payLaoQR(
+      amountLAK: amount,
+      merchantName: widget.qrInfo.merchantName,
+      bank: widget.qrInfo.bank,
+      qrRaw: widget.qrInfo.raw,
+      description: 'LAO QR Payment',
+    );
+
     if (!mounted) return;
-
-    if (!check.allowed) {
-      setState(() => _loading = false);
-      _showLimitDialog(check);
-      return;
-    }
-
-    await Future.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
-
-    await DailyLimitService.instance.recordPayment(amount);
     setState(() => _loading = false);
 
-    localNav.pop();
-    widget.onSuccess?.call();
-
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: rootNav.context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => PaymentSuccessSheet(
-        senderName: 'Sabaidee Wallet',
-        receiverName: widget.qrInfo.merchantName,
-        amountLAK: amount.toDouble(),
-        amountSats: 0,
-        closeToHome: true,
-      ),
-    );
+    if (result.success) {
+      localNav.pop();
+      widget.onSuccess?.call();
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: rootNav.context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => PaymentSuccessSheet(
+          senderName: 'Sabaidee Wallet',
+          receiverName: widget.qrInfo.merchantName,
+          amountLAK: amount.toDouble(),
+          amountSats: 0,
+          closeToHome: true,
+        ),
+      );
+    } else if (result.requireKYC) {
+      _showKycDialog(result.message.isNotEmpty ? result.message : 'ເກີນວົງເງິນ — ຕ້ອງຢືນຢັນ KYC');
+    } else {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(result.message.isNotEmpty ? result.message : 'ເກີດຂໍ້ຜິດພາດ'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+        ));
+    }
   }
 
   // ─── Build ─────────────────────────────────────────────────────────────────
@@ -516,8 +525,8 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
     ),
   );
 
-  // ── Limit exceeded dialog ────────────────────────────────────────────────
-  void _showLimitDialog(LimitCheckResult check) {
+  // ── KYC required dialog ──────────────────────────────────────────────────
+  void _showKycDialog(String message) {
     final rootNav = Navigator.of(context, rootNavigator: true);
     final localNav = Navigator.of(context);
 
@@ -527,19 +536,12 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFE8820C)),
+            Icon(Icons.shield_outlined, color: Color(0xFFE8820C)),
             SizedBox(width: 8),
-            Text('ເກີນວົງເງິນຕໍ່ມື້'),
+            Text('ຕ້ອງຢືນຢັນ KYC'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _dialogRow('ຍອດໃຊ້ວັນນີ້', '${check.todaySpentFormatted} ກີບ'),
-            _dialogRow('ວົງເງິນຄົງເຫຼືອ', '${check.remainingFormatted} ກີບ'),
-            _dialogRow('ຈຳນວນທີ່ຕ້ອງການ', '${_fmt(check.requested)} ກີບ'),
-          ],
-        ),
+        content: Text(message, style: const TextStyle(fontSize: 14, height: 1.5)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -565,22 +567,4 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
       ),
     );
   }
-
-  Widget _dialogRow(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1A1A1A),
-            fontSize: 13,
-          ),
-        ),
-      ],
-    ),
-  );
 }

@@ -1,5 +1,8 @@
 # Dependency directories (Folder ທີ່ເກັບ Library ຫ້າມເອົາຂຶ້ນເພາະມັນໜັກ)
 node_modules/
+
+# Upload files (ຮູບ user — ໃຊ້ Cloudinary ໃນ production)
+uploads/
 jspm_packages/
 
 # Env files (ຂໍ້ມູນຄວາມລັບ: Admin Key, DB URL, JWT Secret)

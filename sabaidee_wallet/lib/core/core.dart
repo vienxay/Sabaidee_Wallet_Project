@@ -8,3 +8,4 @@ library;
 /// ──────────────────────────────────────────────
 export 'app_colors.dart';
 export 'app_constants.dart';
+export 'wallet_result.dart';

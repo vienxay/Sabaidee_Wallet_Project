@@ -1,7 +1,8 @@
 const axios = require('axios');
 
 const LNBITS_URL = () => process.env.LNBITS_URL?.replace(/\/$/, '');
-const ADMIN_KEY = () => process.env.LNBITS_ADMIN_KEY;
+const ADMIN_KEY  = () => process.env.LNBITS_ADMIN_KEY;
+const TIMEOUT    = 15_000; // 15s — LNBits ອາດຊ້າໃນ testnet
 
 const headers = (key) => ({
     'X-Api-Key': key,
@@ -33,7 +34,7 @@ const lnbitsService = {
         };
 
         try {
-            const response = await axios.post(url, payload, { headers: headers(ADMIN_KEY()) });
+            const response = await axios.post(url, payload, { headers: headers(ADMIN_KEY()), timeout: TIMEOUT });
 
             if (!response.data?.wallets?.length) {
                 throw new Error('LNbits created user but no wallet was returned');
@@ -59,6 +60,7 @@ const lnbitsService = {
         try {
             const { data } = await axios.get(`${LNBITS_URL()}/api/v1/wallet`, {
                 headers: headers(invoiceKey),
+                timeout: TIMEOUT,
             });
 
             return {
@@ -75,7 +77,7 @@ const lnbitsService = {
             const { data } = await axios.post(
                 `${LNBITS_URL()}/api/v1/payments`,
                 { out: false, amount, memo },
-                { headers: headers(invoiceKey) },
+                { headers: headers(invoiceKey), timeout: TIMEOUT },
             );
 
             return {
@@ -92,7 +94,7 @@ const lnbitsService = {
             const { data } = await axios.post(
                 `${LNBITS_URL()}/api/v1/payments`,
                 { out: true, bolt11: paymentRequest },
-                { headers: headers(adminKey) },
+                { headers: headers(adminKey), timeout: TIMEOUT },
             );
 
             return {
@@ -108,6 +110,7 @@ const lnbitsService = {
         try {
             await axios.delete(`${LNBITS_URL()}/usermanager/api/v1/wallets/${walletId}`, {
                 headers: headers(ADMIN_KEY()),
+                timeout: TIMEOUT,
             });
             return true;
         } catch (error) {
@@ -122,7 +125,7 @@ const lnbitsService = {
             const { data } = await axios.post(
                 `${LNBITS_URL()}/api/v1/payments/decode`,
                 { data: cleanInvoice },
-                { headers: headers(ADMIN_KEY()) },
+                { headers: headers(ADMIN_KEY()), timeout: TIMEOUT },
             );
 
             return {
@@ -140,6 +143,7 @@ const lnbitsService = {
         try {
             const { data } = await axios.get(`${LNBITS_URL()}/api/v1/payments/${paymentHash}`, {
                 headers: headers(invoiceKey),
+                timeout: TIMEOUT,
             });
 
             return {

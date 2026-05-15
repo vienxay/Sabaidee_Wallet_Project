@@ -1,15 +1,9 @@
 // ─── lib/features/payment/transfer_confirm_screen.dart ──────────────────────
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'payment_success_screen.dart';
 import 'payment_error_dialog.dart';
 import '../kyc/kyc_screen.dart';
-import '../../services/daily_limit_service.dart';
-
-const String _baseUrl =
-    'https://unpluralized-membranophonic-saniya.ngrok-free.dev';
+import '../../services/payment_service.dart';
 
 class TransferConfirmScreen extends StatefulWidget {
   final String senderName;
@@ -74,83 +68,49 @@ class _TransferConfirmScreenState extends State<TransferConfirmScreen>
   Future<void> _onConfirm() async {
     setState(() => _loading = true);
 
-    try {
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'auth_token');
-      if (token == null || !mounted) {
-        setState(() => _loading = false);
-        return;
-      }
+    final result = await PaymentService.instance.payLaoQR(
+      amountLAK: widget.amountLAK,
+      merchantName: widget.receiverName,
+      description: widget.memo,
+    );
 
-      final res = await http.post(
-        Uri.parse('$_baseUrl/api/payment/laoqr/pay'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: jsonEncode({
-          'amountLAK': widget.amountLAK,
-          'merchantName': widget.receiverName,
-          'description': widget.memo,
-        }),
-      );
+    if (!mounted) return;
+    setState(() => _loading = false);
 
-      if (!mounted) return;
-      setState(() => _loading = false);
-
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-
-      if (res.statusCode == 200 && body['success'] == true) {
-        // ✅ record ການຈ່າຍ — ວົງເງິນຫຼຸດຕາມຈິງ
-        await DailyLimitService.instance.recordPayment(widget.amountLAK);
-
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => Scaffold(
-              backgroundColor: Colors.transparent,
-              body: Center(
-                child: PaymentSuccessSheet(
-                  senderName: widget.senderName,
-                  senderAvatarUrl: widget.senderAvatarUrl, // ✅ ສົ່ງຮູບ sender
-                  receiverName: widget.receiverName,
-                  receiverAvatarUrl:
-                      widget.receiverAvatarUrl, // ✅ ສົ່ງຮູບ receiver
-                  amountLAK: widget.amountLAK.toDouble(),
-                  amountSats: 0,
-                  feeLAK: widget.feeLAK,
-                  memo: widget.memo,
-                  closeToHome: true,
-                ),
+    if (result.success) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: PaymentSuccessSheet(
+                senderName: widget.senderName,
+                senderAvatarUrl: widget.senderAvatarUrl,
+                receiverName: widget.receiverName,
+                receiverAvatarUrl: widget.receiverAvatarUrl,
+                amountLAK: widget.amountLAK.toDouble(),
+                amountSats: 0,
+                feeLAK: widget.feeLAK,
+                memo: widget.memo,
+                closeToHome: true,
               ),
             ),
           ),
-        );
-      } else {
-        final errorInfo = PaymentErrorInfo.fromApiResponse(body);
-        await PaymentErrorDialog.show(
-          context,
-          errorInfo: errorInfo,
-          onGoToKYC: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const KycScreen()),
-          ),
-          onRetry: () => _onConfirm(),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-
+        ),
+      );
+    } else {
       await PaymentErrorDialog.show(
         context,
-        errorInfo: const PaymentErrorInfo(
-          type: PaymentErrorType.network,
-          message: 'ບໍ່ສາມາດເຊື່ອມຕໍ່ server ໄດ້',
+        errorInfo: PaymentErrorInfo.fromApiResponse({
+          'message': result.message,
+          'requireKYC': result.requireKYC,
+        }),
+        onGoToKYC: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const KycScreen()),
         ),
-        onRetry: () => _onConfirm(),
+        onRetry: _onConfirm,
       );
     }
   }

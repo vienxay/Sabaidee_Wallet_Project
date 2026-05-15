@@ -1,10 +1,19 @@
+// Entry point ຂອງ App — ເລີ່ມຕົ້ນທຸກຢ່າງທີ່ນີ້
+//
+// ລຳດັບ startup:
+//   1. ຕັ້ງ orientation (portrait only)
+//   2. init StorageService
+//   3. ກວດ JWT token ທ້ອງຖິ່ນ (offline, ໄວ)
+//   4. ຖ້າ logged in → sync KYC status ຈາກ server + ກວດ role admin
+//   5. runApp → ສຸດທ້າຍ route = HomeScreen ຫຼື WelcomeScreen
+
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'core/navigator_key.dart'; // ✅ ເພີ່ມ
+import 'core/navigator_key.dart';
 import 'features/admin/admin_screen.dart';
 import 'features/auth/forgot_password_screen.dart';
 import 'features/auth/google_callback_screen.dart';
@@ -24,11 +33,13 @@ import 'services/session_timeout_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // lock orientation ສະເພາະ portrait — wallet app ບໍ່ຕ້ອງ landscape
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
+  // status bar ໃສ ໂດຍ transparent + dark icons
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -37,17 +48,20 @@ void main() async {
   );
 
   var isLoggedIn = false;
-  var isAdmin = false;
+  var isAdmin    = false;
 
   try {
+    // init SharedPreferences ກ່ອນ ທຸກ service ອື່ນ
     await StorageService.instance.init().timeout(const Duration(seconds: 10));
 
+    // ກວດ JWT locally (ບໍ່ call API) → ໄວ ແລ້ວ ໃຊ້ offline ໄດ້
     isLoggedIn = await AuthService.instance.isLoggedIn().timeout(
       const Duration(seconds: 10),
       onTimeout: () => false,
     );
 
     if (isLoggedIn) {
+      // sync KYC status ຈາກ server (fire-and-forget — ບໍ່ block startup)
       KycGateService.instance.syncFromBackend();
       final user = await AuthService.instance.getMe();
       isAdmin = user?.isAdmin ?? false;
@@ -82,13 +96,16 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     super.initState();
     _initDeepLinks();
 
-    // ✅ ໃຊ້ navigatorKey global ແທນ _navigatorKey
+    // register SessionTimeout observer + start timer ຖ້າ logged in
     SessionTimeoutService.instance.init(navigatorKey);
     if (widget.isLoggedIn) {
       SessionTimeoutService.instance.onUserActivity();
     }
   }
 
+  // ─── Deep Links ──────────────────────────────────────────────────────────
+  // ຮອງຮັບ: sabaidee://home, sabaidee://kyc
+  // ໃຊ້ redirect ຈາກ server ຫຼັງ Google OAuth callback
   Future<void> _initDeepLinks() async {
     final initialLink = await _appLinks.getInitialLink();
     if (initialLink != null) _handleLink(initialLink);
@@ -112,6 +129,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
 
     switch (uri.host) {
       case 'home':
+        // sync KYC ກ່ອນ show home (ອາດ verified ຫຼັງຈາກ admin approve)
         await KycGateService.instance.syncFromBackend();
         navigatorKey.currentState?.pushNamedAndRemoveUntil(
           '/home',
@@ -142,30 +160,31 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     return MaterialApp(
       title: 'Sabaidee Wallet',
       debugShowCheckedModeBanner: false,
-      navigatorKey: navigatorKey, // ✅ ໃຊ້ global key
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         fontFamily: 'NotoSansLao',
       ),
+      // GestureDetector ຄອບ app ທັງໝົດ — reset session timer ທຸກຄັ້ງທີ່ user ສຳຜັດ
       builder: (context, child) => GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: () => SessionTimeoutService.instance.onUserActivity(),
+        onTap:     () => SessionTimeoutService.instance.onUserActivity(),
         onPanDown: (_) => SessionTimeoutService.instance.onUserActivity(),
         child: child,
       ),
       home: _initialScreen,
       routes: {
-        '/welcome': (_) => const WelcomeScreen(),
-        '/login': (_) => const LoginScreen(),
-        '/register': (_) => const RegisterScreen(),
-        '/forgot-password': (_) => const ForgotPasswordScreen(),
+        '/welcome':          (_) => const WelcomeScreen(),
+        '/login':            (_) => const LoginScreen(),
+        '/register':         (_) => const RegisterScreen(),
+        '/forgot-password':  (_) => const ForgotPasswordScreen(),
         '/otp-verification': (_) => const OtpVerificationScreen(),
-        '/reset-password': (_) => const ResetPasswordScreen(),
-        '/home': (_) => const HomeScreen(),
-        '/profile': (_) => const ProfileScreen(),
-        '/kyc': (_) => const KycScreen(),
-        '/admin': (_) => const AdminScreen(),
+        '/reset-password':   (_) => const ResetPasswordScreen(),
+        '/home':             (_) => const HomeScreen(),
+        '/profile':          (_) => const ProfileScreen(),
+        '/kyc':              (_) => const KycScreen(),
+        '/admin':            (_) => const AdminScreen(),
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
       },
       onUnknownRoute: (settings) =>

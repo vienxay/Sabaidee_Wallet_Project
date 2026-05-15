@@ -4,84 +4,19 @@ const Transaction  = require('../models/Transaction');
 const Kyc          = require('../models/Kyc');
 const lnbits       = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
-const axios        = require('axios');
+const {
+    isLightningAddress,
+    isLNURL,
+    fetchInvoiceFromLNURL,
+    fetchInvoiceFromAddress,
+} = require('../utils/lightningUtils');
 
 // ════════════════════════════════════════════════════════════════════════════
 // Constants / Limits
 // ════════════════════════════════════════════════════════════════════════════
 const WITHDRAWAL_LIMIT = {
-    unverified: { perTx: 500_000,   daily: 1_000_000  }, // LAK
-    verified:   { perTx: 5_000_000, daily: 20_000_000 }, // LAK
-};
-
-// ✅ ກວດ LNURL
-const isLNURL = (str) =>
-    str.toUpperCase().startsWith('LNURL');
-
-// ✅ decode LNURL bech32 → URL
-const decodeLNURL = (lnurl) => {
-    const bech32 = require('bech32');
-    const decoded = bech32.bech32.decode(lnurl, 2000);
-    const bytes   = bech32.bech32.fromWords(decoded.words);
-    return Buffer.from(bytes).toString('utf8');
-};
-
-// ✅ ດຶງ invoice ຈາກ LNURL
-const fetchInvoiceFromLNURL = async (lnurl, amountSats) => {
-    // 1. decode LNURL → URL
-    const url = decodeLNURL(lnurl);
-
-    // 2. ດຶງ LNURL-pay metadata
-    const { data: meta } = await axios.get(url, { timeout: 10_000 });
-    if (meta.tag !== 'payRequest') {
-        throw new Error('ບໍ່ຮອງຮັບ LNURL ນີ້');
-    }
-
-    const amountMsats = amountSats * 1000;
-    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
-        const minS = Math.ceil(meta.minSendable / 1000);
-        const maxS = Math.floor(meta.maxSendable / 1000);
-        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
-    }
-
-    // 3. ຂໍ invoice
-    const callbackUrl = `${meta.callback}?amount=${amountMsats}`;
-    const { data: inv } = await axios.get(callbackUrl, { timeout: 10_000 });
-    if (!inv.pr) throw new Error('ບໍ່ສາມາດຂໍ invoice ຈາກ LNURL ໄດ້');
-
-    return inv.pr;
-};
-
-// ════════════════════════════════════════════════════════════════════════════
-// Helpers
-// ════════════════════════════════════════════════════════════════════════════
-
-/** ກວດວ່າ string ເປັນ Lightning Address format */
-const isLightningAddress = (str) =>
-    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(str.trim());
-
-/** ດຶງ invoice (BOLT11) ຈາກ Lightning Address ຜ່ານ LNURL-pay */
-const fetchInvoiceFromAddress = async (address, amountSats) => {
-    const [user, domain] = address.split('@');
-    const lnurlEndpoint  = `https://${domain}/.well-known/lnurlp/${user}`;
-
-    // Step 1: ດຶງ LNURL-pay metadata
-    const { data: meta } = await axios.get(lnurlEndpoint, { timeout: 10_000 });
-    if (meta.tag !== 'payRequest') throw new Error('ບໍ່ຮອງຮັບ Lightning Address ນີ້');
-
-    const amountMsats = amountSats * 1000;
-    if (amountMsats < meta.minSendable || amountMsats > meta.maxSendable) {
-        const minS = meta.minSendable / 1000;
-        const maxS = meta.maxSendable / 1000;
-        throw new Error(`ຈຳນວນຕ້ອງຢູ່ລະຫວ່າງ ${minS} – ${maxS} sats`);
-    }
-
-    // Step 2: ຂໍ invoice
-    const callbackUrl = `${meta.callback}?amount=${amountMsats}`;
-    const { data: inv } = await axios.get(callbackUrl, { timeout: 10_000 });
-    if (!inv.pr) throw new Error('ບໍ່ສາມາດຂໍ invoice ຈາກ Lightning Address ໄດ້');
-
-    return inv.pr; // BOLT11 invoice string
+    unverified: { perTx: 500_000,   daily: 1_000_000  },
+    verified:   { perTx: 5_000_000, daily: 20_000_000 },
 };
 
 /** ຍອດຖອນລາຍວັນ (LAK) */

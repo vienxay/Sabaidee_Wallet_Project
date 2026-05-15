@@ -5,12 +5,11 @@ const { upload } = require('../services/cloudinaryService'); // ✅
 
 const {
     register, login, getMe, logout,
-    updateProfile, updateProfileImage,
     googleCallback, googleFailed,
 } = require('../controllers/authController');
 
 const {
-    forgotPassword, verifyOTP, resetPassword, changePassword,
+    forgotPassword, verifyOTP, resetPassword,
 } = require('../controllers/passwordController');
 
 const router = express.Router();
@@ -20,11 +19,6 @@ router.post('/register',  register);
 router.post('/login',     login);
 router.get('/me',         protect, getMe);
 router.post('/logout',    protect, logout);
-
-// ─── Profile ──────────────────────────────────────────────────────────────────
-// router.put('/profile',             protect, updateProfile);
-// router.put('/profile/image',       protect, upload.single('image'), updateProfileImage); // ✅
-// router.put('/password',            protect, changePassword);
 
 // ─── Password Reset ───────────────────────────────────────────────────────────
 router.post('/forgot-password', forgotPassword);

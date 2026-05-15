@@ -9,21 +9,11 @@ const { protect, adminOrStaff } = require('../middleware/authMiddleware'); // �
 const upload = multer({
     storage: multer.memoryStorage(),
     fileFilter: (req, file, cb) => {
-        console.log('📁 Upload file:', {
-            originalname: file.originalname,
-            mimetype:     file.mimetype,
-            fieldname:    file.fieldname,
-        });
-
         const allowedExts = ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'];
         const ext = path.extname(file.originalname).toLowerCase();
 
-        if (allowedExts.includes(ext)) {
-            console.log('✅ File accepted');
-            return cb(null, true);
-        }
+        if (allowedExts.includes(ext)) return cb(null, true);
 
-        console.log('❌ File rejected. Ext:', ext, 'Mime:', file.mimetype);
         cb(new Error(`ອະນຸຍາດສະເພາະ ${allowedExts.join(', ')}`));
     },
     limits: { fileSize: 10 * 1024 * 1024 },
