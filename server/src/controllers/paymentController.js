@@ -1,7 +1,8 @@
-const Wallet = require('../models/Wallet');
+const axios       = require('axios');
+const Wallet      = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
-const Kyc = require('../models/Kyc');
-const lnbits = require('../services/lnbitsService');
+const Kyc         = require('../models/Kyc');
+const lnbits      = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
 const {
     isLightningAddress,
