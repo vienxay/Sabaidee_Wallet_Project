@@ -230,14 +230,26 @@ class _TxCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: tx.isReceive
-                    ? AppColors.successLight
-                    : AppColors.primaryLight,
+                color: tx.isPending
+                    ? Colors.grey.shade100
+                    : tx.isFailed
+                        ? Colors.grey.shade100
+                        : tx.isReceive
+                            ? AppColors.successLight
+                            : AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                Icons.bolt,
-                color: tx.isReceive ? AppColors.success : AppColors.primary,
+                tx.isPending
+                    ? Icons.access_time_rounded
+                    : Icons.bolt,
+                color: tx.isPending
+                    ? Colors.grey
+                    : tx.isFailed
+                        ? Colors.grey
+                        : tx.isReceive
+                            ? AppColors.success
+                            : AppColors.primary,
                 size: 22,
               ),
             ),
@@ -272,18 +284,27 @@ class _TxCard extends StatelessWidget {
                 Text(
                   tx.isFailed
                       ? 'ລົ້ມເຫລວ'
-                      : '${tx.isReceive ? '+' : '-'}${tx.amountSats} sats',
+                      : tx.isPending
+                          ? '${tx.isReceive ? '+' : '-'}${tx.amountSats} sats'
+                          : '${tx.isReceive ? '+' : '-'}${tx.amountSats} sats',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: tx.isFailed
                         ? Colors.grey
-                        : tx.isReceive
-                            ? AppColors.success
-                            : AppColors.error,
+                        : tx.isPending
+                            ? Colors.orange.shade300
+                            : tx.isReceive
+                                ? AppColors.success
+                                : AppColors.error,
                   ),
                 ),
-                if (!tx.isFailed)
+                if (tx.isPending)
+                  const Text(
+                    'ລໍຖ້າ',
+                    style: TextStyle(fontSize: 10, color: Colors.orange),
+                  )
+                else if (!tx.isFailed)
                   Text(
                     '${tx.amountLAK} LAK',
                     style: const TextStyle(
