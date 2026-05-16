@@ -142,7 +142,7 @@ exports.previewWithdrawal = async (req, res) => {
             destination:     destination.trim(),
             amountLAK,
             amountSats,
-            estimatedFeeSats: Math.ceil(amountSats * 0.001), // ~0.1% estimate
+            estimatedFeeSats: 0, // withdrawal ບໍ່ເກັບ fee ຈາກ user
             balanceSats:     wallet.balanceSats,
             rate: {
                 btcToLAK: rate.btcToLAK,

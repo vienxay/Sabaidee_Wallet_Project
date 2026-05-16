@@ -487,8 +487,6 @@ class _ConfirmBottomSheet extends StatelessWidget {
           ),
           const Divider(height: 24),
           _row('ຖອນຫາບັນຊີ', _fmtDest(preview.destination), small: true),
-          const Divider(height: 24),
-          _row('ຄ່າທຳນຽມ', '${fmt.format(preview.estimatedFeeSats)} sats'),
           const SizedBox(height: 28),
           Row(
             children: [
