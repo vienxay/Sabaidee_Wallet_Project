@@ -91,7 +91,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             ),
           );
         } else {
-          _showError(sendResult.message.isNotEmpty ? sendResult.message : 'ຖອນເງິນບໍ່ສຳເລັດ');
+          _showError(
+            sendResult.message.isNotEmpty
+                ? sendResult.message
+                : 'ຖອນເງິນບໍ່ສຳເລັດ',
+          );
         }
       } else {
         // ✅ ສະແດງ error ຕົງໆ — ບໍ່ຕ້ອງ KYC ສຳລັບການຖອນ
@@ -479,7 +483,7 @@ class _ConfirmBottomSheet extends StatelessWidget {
             '${fmt.format(preview.amountLAK)} LAK\nSats ${fmt.format(preview.amountSats)}',
           ),
           const Divider(height: 24),
-          _row('ຈ່າຍໄປ', _fmtDest(preview.destination), small: true),
+          _row('ຖອນຫາບັນຊີ', _fmtDest(preview.destination), small: true),
           const Divider(height: 24),
           _row('ຄ່າທຳນຽມ', '${fmt.format(preview.estimatedFeeSats)} sats'),
           const SizedBox(height: 28),
