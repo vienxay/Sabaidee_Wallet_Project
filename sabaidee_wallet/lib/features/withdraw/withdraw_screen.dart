@@ -20,18 +20,25 @@ class WithdrawScreen extends StatefulWidget {
 }
 
 class _WithdrawScreenState extends State<WithdrawScreen> {
-  final _addressController = TextEditingController();
-  final _amountLAKController = TextEditingController();
+  final _addressController    = TextEditingController();
+  final _amountSatsController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  bool _isLoading = false;
-  double? _previewSats;
+  bool    _isLoading    = false;
+  double? _previewLAK;
   String? _previewError;
 
   final _numberFormat = NumberFormat('#,###', 'en_US');
 
-  double get _enteredLAK =>
-      double.tryParse(_amountLAKController.text.replaceAll(',', '')) ?? 0;
+  // ອັດຕາ LAK ຕໍ່ 1 sat — ຄຳນວນຈາກ balance ທີ່ wallet ສົ່ງມາ
+  double get _lakPerSat =>
+      widget.balanceSats > 0 ? widget.balanceLAK / widget.balanceSats : 0;
+
+  double get _enteredSats =>
+      double.tryParse(_amountSatsController.text.replaceAll(',', '')) ?? 0;
+
+  // ແປງ sats → LAK ສຳລັບ server call
+  double get _enteredLAK => (_enteredSats * _lakPerSat).roundToDouble();
 
   // ── Live preview ─────────────────────────────────────────────────────────
   void _onAmountChanged(String raw) {
@@ -41,7 +48,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (cleaned.isNotEmpty) {
       final formatted = _numberFormat.format(val);
       if (formatted != raw) {
-        _amountLAKController.value = TextEditingValue(
+        _amountSatsController.value = TextEditingValue(
           text: formatted,
           selection: TextSelection.collapsed(offset: formatted.length),
         );
@@ -49,7 +56,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     }
 
     setState(() {
-      _previewSats = val > 0 ? (val / 0.37).roundToDouble() : null;
+      _previewLAK = val > 0 ? val * _lakPerSat : null;
     });
   }
 
@@ -133,7 +140,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     );
     if (result != null && mounted) {
       _addressController.text = result.trim();
-      _onAmountChanged(_amountLAKController.text);
+      _onAmountChanged(_amountSatsController.text);
     }
   }
 
@@ -151,7 +158,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   @override
   void dispose() {
     _addressController.dispose();
-    _amountLAKController.dispose();
+    _amountSatsController.dispose();
     super.dispose();
   }
 
@@ -253,11 +260,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ── Amount LAK ─────────────────────────────────────────────────
-            _buildLabel('Enter Amount'),
+            // ── Amount Sats ────────────────────────────────────────────────
+            _buildLabel('ໃສ່ຈຳນວນ Sats'),
             const SizedBox(height: 8),
             TextFormField(
-              controller: _amountLAKController,
+              controller: _amountSatsController,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
               style: const TextStyle(
@@ -267,25 +274,21 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               ),
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: _onAmountChanged,
-              decoration: _inputDecoration(hint: '0', suffix: 'LAK'),
+              decoration: _inputDecoration(hint: '0', suffix: 'sats'),
               validator: (v) {
                 final val = double.tryParse(v?.replaceAll(',', '') ?? '') ?? 0;
-                if (val <= 0) {
-                  return 'ກະລຸນາໃສ່ຈຳນວນ';
-                }
-                if (val > widget.balanceLAK) {
-                  return 'ຍອດບໍ່ພໍ';
-                }
+                if (val <= 0) return 'ກະລຸນາໃສ່ຈຳນວນ';
+                if (val > widget.balanceSats) return 'ຍອດ sats ບໍ່ພໍ';
                 return null;
               },
             ),
 
-            // ── Sats preview ───────────────────────────────────────────────
-            if (_previewSats != null)
+            // ── LAK preview ────────────────────────────────────────────────
+            if (_previewLAK != null)
               Padding(
                 padding: const EdgeInsets.only(top: 6, left: 12),
                 child: Text(
-                  'Sats ${_numberFormat.format(_previewSats!.round())}',
+                  '≈ ${_numberFormat.format(_previewLAK!.round())} LAK',
                   style: const TextStyle(color: Colors.grey, fontSize: 13),
                 ),
               ),
