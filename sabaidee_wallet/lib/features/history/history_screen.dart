@@ -270,20 +270,27 @@ class _TxCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${tx.isReceive ? '+' : '-'}${tx.amountSats} sats',
+                  tx.isFailed
+                      ? 'ລົ້ມເຫລວ'
+                      : '${tx.isReceive ? '+' : '-'}${tx.amountSats} sats',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: tx.isReceive ? AppColors.success : AppColors.error,
+                    color: tx.isFailed
+                        ? Colors.grey
+                        : tx.isReceive
+                            ? AppColors.success
+                            : AppColors.error,
                   ),
                 ),
-                Text(
-                  '${tx.amountLAK} LAK',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textGrey,
+                if (!tx.isFailed)
+                  Text(
+                    '${tx.amountLAK} LAK',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textGrey,
+                    ),
                   ),
-                ),
               ],
             ),
           ],

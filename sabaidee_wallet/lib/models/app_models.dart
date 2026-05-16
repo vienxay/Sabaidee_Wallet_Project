@@ -157,9 +157,10 @@ class TransactionModel {
   );
 
   bool get isReceive => type == 'topup' || type == 'receive';
-  bool get isSend    => type == 'withdraw' || type == 'pay';
-  bool get isSuccess => status == 'ສຳເລັດ';
-  bool get isPending => status == 'ລໍຖ້າດຳເນີນການ';
+  bool get isSend    => type == 'withdraw' || type == 'pay' || type == 'laoQR';
+  bool get isSuccess => status == 'success';
+  bool get isPending => status == 'pending';
+  bool get isFailed  => status == 'failed';
 }
 
 // ─── Invoice Decode Model ─────────────────────────────────────────────────────

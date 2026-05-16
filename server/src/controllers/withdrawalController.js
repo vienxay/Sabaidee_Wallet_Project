@@ -291,7 +291,7 @@ exports.sendWithdrawal = async (req, res) => {
                 type:        'withdraw',
                 status:      'failed',
                 amountSats:  0,
-                amountLAK:   req.body.amountLAK || 0,
+                amountLAK:   0,
                 destination: req.body.destination || '',
                 memo:        'Failed withdrawal',
                 errorMsg:    error.message,
