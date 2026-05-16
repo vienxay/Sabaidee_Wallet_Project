@@ -237,10 +237,11 @@ exports.sendWithdrawal = async (req, res) => {
             paymentRequest,
         });
 
-        const feeSats = payResult.feeSats || 0;
+        // withdrawal ບໍ່ຫັກ fee ຈາກ user — fee ຖືກ absorb ໂດຍ system
+        // (fee ຕົວຈິງຍັງຖືກຈ່າຍຜ່ານ LNBits ແຕ່ user ຈ່າຍສະເພາະ amountSats)
 
-        // ── Update wallet balance ────────────────────────────────────────────
-        wallet.balanceSats = wallet.balanceSats - amountSats - feeSats;
+        // ── Update wallet balance (ຫັກແຕ່ amountSats ເທົ່ານັ້ນ) ────────────
+        wallet.balanceSats = wallet.balanceSats - amountSats;
         await wallet.save();
 
         // ── Save Transaction ─────────────────────────────────────────────────
@@ -251,7 +252,7 @@ exports.sendWithdrawal = async (req, res) => {
             status:          'success',
             amountSats,
             amountLAK,
-            feeSats,
+            feeSats:         0,
             paymentHash:     payResult.paymentHash,
             paymentRequest,
             destination:     destination.trim(),
@@ -275,7 +276,7 @@ exports.sendWithdrawal = async (req, res) => {
             destinationType: destType,
             amountSats,
             amountLAK,
-            feeSats,
+            feeSats:       0,
             balanceSats:   wallet.balanceSats,
             createdAt:     transaction.createdAt,
             rate: {
