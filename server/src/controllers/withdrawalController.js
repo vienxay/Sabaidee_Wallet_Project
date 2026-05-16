@@ -206,8 +206,13 @@ exports.sendWithdrawal = async (req, res) => {
         // ── ຄຳນວນ sats ───────────────────────────────────────────────────────
         const amountSats = await exchangeRate.convertLAKToSats(amountLAK);
 
-        if (wallet.balanceSats < amountSats) {
-            return res.status(400).json({ success: false, message: 'ຍອດ sats ບໍ່ພໍ' });
+        // LNBits ຮຽກຮ້ອງ reserve ຢ່າງໜ້ອຍ 10 sats ສຳລັບ routing fee
+        const MIN_RESERVE_SATS = 10;
+        if (wallet.balanceSats < amountSats + MIN_RESERVE_SATS) {
+            return res.status(400).json({
+                success: false,
+                message: `ຍອດ sats ບໍ່ພໍ — ຕ້ອງມີຢ່າງໜ້ອຍ ${amountSats + MIN_RESERVE_SATS} sats (ມີ ${wallet.balanceSats} sats)`,
+            });
         }
 
         // ── ໄດ້ BOLT11 invoice ───────────────────────────────────────────────
