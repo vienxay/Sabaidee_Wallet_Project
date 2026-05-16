@@ -232,11 +232,12 @@ exports.sendWithdrawal = async (req, res) => {
             paymentRequest,
         });
 
-        // withdrawal ບໍ່ຫັກ fee ຈາກ user — fee ຖືກ absorb ໂດຍ system
-        // (fee ຕົວຈິງຍັງຖືກຈ່າຍຜ່ານ LNBits ແຕ່ user ຈ່າຍສະເພາະ amountSats)
-
-        // ── Update wallet balance (ຫັກແຕ່ amountSats ເທົ່ານັ້ນ) ────────────
-        wallet.balanceSats = wallet.balanceSats - amountSats;
+        // ── Sync balance ຈາກ LNBits ຕົວຈິງ ────────────────────────────────
+        // ໃຊ້ balance ຕົວຈິງ ເພາະ routing fee ຈາກ Lightning Network
+        // ຖືກຫັກໂດຍ LNBits ອັດຕະໂນມັດ (user ເຫັນ balance ຖືກຕ້ອງ)
+        const newBalance    = await lnbits.getBalance(wallet.invoiceKey);
+        wallet.balanceSats  = Math.max(0, newBalance.balanceSats);
+        wallet.balanceLAK   = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
         // ── Save Transaction ─────────────────────────────────────────────────
