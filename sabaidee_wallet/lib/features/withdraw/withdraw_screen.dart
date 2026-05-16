@@ -278,7 +278,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               validator: (v) {
                 final val = double.tryParse(v?.replaceAll(',', '') ?? '') ?? 0;
                 if (val <= 0) return 'ກະລຸນາໃສ່ຈຳນວນ';
-                if (val < 100) return 'ຖອນຂັ້ນຕ່ຳ 100 sats (routing fee protection)';
+                if (val < 100) return 'ຖອນຂັ້ນຕ່ຳ 100 sats';
                 if (val > widget.balanceSats) return 'ຍອດ sats ບໍ່ພໍ';
                 return null;
               },
