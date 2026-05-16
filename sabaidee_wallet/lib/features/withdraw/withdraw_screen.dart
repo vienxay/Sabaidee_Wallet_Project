@@ -60,8 +60,71 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     });
   }
 
+  // ── Insufficient Balance Dialog ──────────────────────────────────────────
+  void _showInsufficientDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Colors.red.shade400,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'ຍອດ sats ບໍ່ພໍ',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'ທ່ານມີ ${_numberFormat.format(widget.balanceSats)} sats\n'
+              'ໃສ່ຈຳນວນ sats ໜ້ອຍກວ່ານີ້',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF8C00),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('ຕົກລົງ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Withdraw Flow ─────────────────────────────────────────────────────────
   Future<void> _onWithdraw() async {
+    // ກວດ balance ກ່ອນ validate — ສະແດງ dialog ທັນທີ
+    if (_enteredSats > widget.balanceSats && _enteredSats > 0) {
+      _showInsufficientDialog();
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
