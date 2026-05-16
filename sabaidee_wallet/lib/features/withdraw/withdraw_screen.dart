@@ -419,6 +419,27 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   );
 }
 
+// ─── Helper: format destination ──────────────────────────────────────────────
+// Lightning Address → user@domain.com
+// BOLT11 invoice   → lnbc1234...abcd
+// LNURL            → LNURL Payment
+String _fmtDest(String dest) {
+  if (dest.isEmpty) return 'Lightning Network';
+  // Lightning Address (user@domain.com) — readable ຢູ່ແລ້ວ
+  if (dest.contains('@') && !dest.toLowerCase().startsWith('lnbc')) return dest;
+  // LNURL
+  if (dest.toUpperCase().startsWith('LNURL')) return 'LNURL Payment';
+  // BOLT11 invoice — truncate
+  if (dest.toLowerCase().startsWith('lnbc') && dest.length > 20) {
+    return '${dest.substring(0, 12)}...${dest.substring(dest.length - 8)}';
+  }
+  // fallback truncate
+  if (dest.length > 30) {
+    return '${dest.substring(0, 15)}...${dest.substring(dest.length - 8)}';
+  }
+  return dest;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Confirm Bottom Sheet
 // ═════════════════════════════════════════════════════════════════════════════
@@ -458,7 +479,7 @@ class _ConfirmBottomSheet extends StatelessWidget {
             '${fmt.format(preview.amountLAK)} LAK\nSats ${fmt.format(preview.amountSats)}',
           ),
           const Divider(height: 24),
-          _row('ຈ່າຍໄປ', preview.destination, small: true),
+          _row('ຈ່າຍໄປ', _fmtDest(preview.destination), small: true),
           const Divider(height: 24),
           _row('ຄ່າທຳນຽມ', '${fmt.format(preview.estimatedFeeSats)} sats'),
           const SizedBox(height: 28),

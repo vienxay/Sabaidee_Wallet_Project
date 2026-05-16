@@ -2,6 +2,20 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+// format destination ໃຫ້ user-friendly
+String _fmtDest(String dest) {
+  if (dest.isEmpty) return 'Lightning Network';
+  if (dest.contains('@') && !dest.toLowerCase().startsWith('lnbc')) return dest;
+  if (dest.toUpperCase().startsWith('LNURL')) return 'LNURL Payment';
+  if (dest.toLowerCase().startsWith('lnbc') && dest.length > 20) {
+    return '${dest.substring(0, 12)}...${dest.substring(dest.length - 8)}';
+  }
+  if (dest.length > 30) {
+    return '${dest.substring(0, 15)}...${dest.substring(dest.length - 8)}';
+  }
+  return dest;
+}
+
 class WithdrawSuccessScreen extends StatefulWidget {
   final Map<String, dynamic> data;
   const WithdrawSuccessScreen({super.key, required this.data});
@@ -45,7 +59,7 @@ class _WithdrawSuccessScreenState extends State<WithdrawSuccessScreen>
 
     final amountLAK = data['amountLAK'] ?? 0;
     final amountSats = data['amountSats'] ?? 0;
-    final destination = data['destination'] ?? '';
+    final destination = _fmtDest(data['destination'] ?? '');
     final feeSats = data['feeSats'] ?? 0;
 
     return Scaffold(
