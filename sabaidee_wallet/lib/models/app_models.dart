@@ -198,12 +198,12 @@ class DecodedInvoiceModel {
     final isLNURL  = inv['isLNURL']  as bool? ?? false;
     final isAddress = inv['isAddress'] as bool? ?? false;
 
-    // LNURL ໃຊ້ minSats ເປັນ default amount, BOLT11 ໃຊ້ amountSats ໂດຍກົງ
-    final amountSats = isLNURL
-        ? (inv['minSats'] as num?)?.toInt() ?? 0
+    // LNURL/Address: amount = 0 (user ຕ້ອງໃສ່ເອງ), BOLT11: amount fixed
+    final amountSats = (isLNURL || isAddress)
+        ? 0
         : (inv['amountSats'] as num?)?.toInt() ?? 0;
-    final amountLAK = isLNURL
-        ? (inv['minLAK'] as num?)?.toInt() ?? 0
+    final amountLAK = (isLNURL || isAddress)
+        ? 0
         : (inv['amountLAK'] as num?)?.toInt() ?? 0;
 
     return DecodedInvoiceModel(
