@@ -53,14 +53,24 @@ class HomeRecentTx extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: tx.isReceive
-                    ? AppColors.successLight
-                    : AppColors.primaryLight,
+                color: tx.isPending
+                    ? Colors.grey.shade100
+                    : tx.isFailed
+                        ? Colors.grey.shade100
+                        : tx.isReceive
+                            ? AppColors.successLight
+                            : AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                Icons.bolt,
-                color: tx.isReceive ? AppColors.success : AppColors.primary,
+                tx.isPending ? Icons.access_time_rounded : Icons.bolt,
+                color: tx.isPending
+                    ? Colors.grey
+                    : tx.isFailed
+                        ? Colors.grey
+                        : tx.isReceive
+                            ? AppColors.success
+                            : AppColors.primary,
                 size: 20,
               ),
             ),
@@ -97,20 +107,34 @@ class HomeRecentTx extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${tx.isReceive ? '+' : '-'}${_fmt(tx.amountSats)} sats',
+                  tx.isFailed
+                      ? 'ລົ້ມເຫລວ'
+                      : '${tx.isReceive ? '+' : '-'}${_fmt(tx.amountSats)} sats',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: tx.isReceive ? AppColors.success : AppColors.error,
+                    color: tx.isFailed
+                        ? Colors.grey
+                        : tx.isPending
+                            ? Colors.orange.shade300
+                            : tx.isReceive
+                                ? AppColors.success
+                                : AppColors.error,
                   ),
                 ),
-                Text(
-                  '${_fmt(tx.amountLAK)} LAK',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textGrey,
+                if (tx.isPending)
+                  const Text(
+                    'ລໍຖ້າ',
+                    style: TextStyle(fontSize: 10, color: Colors.orange),
+                  )
+                else if (!tx.isFailed)
+                  Text(
+                    '${_fmt(tx.amountLAK)} LAK',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textGrey,
+                    ),
                   ),
-                ),
               ],
             ),
           ],
