@@ -124,30 +124,6 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     // ຕ້ອງ handle ກ່ອນ isLoggedIn check ເພາະ token ຍັງບໍ່ຖືກ save ເທື່ອ
     if (uri.host == 'auth' &&
         (uri.path == '/callback' || uri.path == '/auth/callback')) {
-
-      final error = uri.queryParameters['error'];
-
-      // ─── error case ───────────────────────────────────────────────────
-      if (error == 'already_registered') {
-        // user ນີ້ register ດ້ວຍ Google ຢູ່ແລ້ວ → ໄປ login
-        navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          '/login',
-          (_) => false,
-          arguments: 'google_already_registered',
-        );
-        return;
-      }
-
-      if (error != null) {
-        // error ອື່ນໆ → ໄປ login ທຳມະດາ
-        navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          '/login',
-          (_) => false,
-        );
-        return;
-      }
-
-      // ─── success case ─────────────────────────────────────────────────
       final token = uri.queryParameters['token'];
       if (token == null || token.isEmpty) return;
 

@@ -11,14 +11,11 @@ const lnbits         = require('../services/lnbitsService');
 passport.use(
   new GoogleStrategy(
     {
-      clientID:           process.env.GOOGLE_CLIENT_ID,
-      clientSecret:       process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL:        process.env.GOOGLE_CALLBACK_URL,
-      passReqToCallback:  true,
+      clientID:     process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL:  process.env.GOOGLE_CALLBACK_URL,
     },
-    async (req, accessToken, refreshToken, profile, done) => {
-      // state = 'register' | 'login' ທີ່ Flutter ສ່ົງມາ
-      const oauthState = req.query.state || 'login';
+    async (accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
         if (!email) {
@@ -49,11 +46,6 @@ passport.use(
           // ກວດ wallet — ສ້າງໃຫ້ຖ້າຍັງບໍ່ມີ
           const existingWallet = await Wallet.findOne({ user: user._id });
           if (!existingWallet) await _createWalletForUser(user, name);
-
-          // ຖ້າ intent = register ແຕ່ user ມີຢູ່ → flag ໃຫ້ callback ຮູ້
-          if (oauthState === 'register') {
-            user._alreadyRegistered = true;
-          }
 
           return done(null, user);
         }

@@ -25,37 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
-      if (args == 'google_already_registered') {
-        showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: const Row(children: [
-              Icon(Icons.info_outline, color: Colors.orange),
-              SizedBox(width: 8),
-              Text('ມີບັນຊີຢູ່ແລ້ວ'),
-            ]),
-            content: const Text(
-              'Gmail ນີ້ໄດ້ລົງທະບຽນໄວ້ແລ້ວ\nກະລຸນາເຂົ້າສູ່ລະບົບດ້ວຍ Google',
-              style: TextStyle(height: 1.5),
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text('ຕົກລົງ'),
-              ),
-            ],
-          ),
-        );
-      } else if (args == 'session_expired') {
+      if (args == 'session_expired') {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(
