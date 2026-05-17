@@ -26,9 +26,16 @@ router.post('/verify-otp',      verifyOTP);
 router.post('/reset-password',  resetPassword);
 
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
-router.get('/google',
-    passport.authenticate('google', { scope: ['profile', 'email'], session: false })
-);
+// state=register → ຖ້າ email ມີຢູ່ແລ້ວ ຈະ redirect ໄປ login ພ້ອມ error
+// state=login    → login ປົກກະຕິ
+router.get('/google', (req, res, next) => {
+    const state = req.query.state || 'login';
+    passport.authenticate('google', {
+        scope:   ['profile', 'email'],
+        session: false,
+        state,
+    })(req, res, next);
+});
 router.get('/google/callback',
     passport.authenticate('google', { session: false, failureRedirect: '/api/auth/google/failed' }),
     googleCallback

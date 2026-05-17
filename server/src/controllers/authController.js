@@ -181,13 +181,20 @@ exports.logout = (req, res) => {
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
 exports.googleCallback = async (req, res) => {
     try {
+        // user ມີຢູ່ແລ້ວ ແຕ່ intent = register → redirect ໄປ login ພ້ອມ error
+        if (req.user._alreadyRegistered) {
+            return res.redirect(
+                `${process.env.FRONTEND_URL}/callback?error=already_registered`
+            );
+        }
+
         const token = generateToken(req.user._id);
         // sabaidee://auth + /callback = sabaidee://auth/callback
         const redirectUrl = `${process.env.FRONTEND_URL}/callback?token=${token}`;
         res.redirect(redirectUrl);
     } catch (error) {
         console.error('Google Callback Error:', error);
-        res.redirect(`${process.env.FRONTEND_URL}/login?error=google_auth_failed`);
+        res.redirect(`${process.env.FRONTEND_URL}/callback?error=google_auth_failed`);
     }
 };
 

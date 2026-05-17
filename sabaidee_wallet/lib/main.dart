@@ -124,13 +124,34 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
     // ຕ້ອງ handle ກ່ອນ isLoggedIn check ເພາະ token ຍັງບໍ່ຖືກ save ເທື່ອ
     if (uri.host == 'auth' &&
         (uri.path == '/callback' || uri.path == '/auth/callback')) {
+
+      final error = uri.queryParameters['error'];
+
+      // ─── error case ───────────────────────────────────────────────────
+      if (error == 'already_registered') {
+        // user ນີ້ register ດ້ວຍ Google ຢູ່ແລ້ວ → ໄປ login
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (_) => false,
+          arguments: 'google_already_registered',
+        );
+        return;
+      }
+
+      if (error != null) {
+        // error ອື່ນໆ → ໄປ login ທຳມະດາ
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (_) => false,
+        );
+        return;
+      }
+
+      // ─── success case ─────────────────────────────────────────────────
       final token = uri.queryParameters['token'];
       if (token == null || token.isEmpty) return;
 
-      // 1. save token ກ່ອນ
       await StorageService.instance.saveToken(token);
-
-      // 2. fetch user ຈາກ server ດ້ວຍ token ໃໝ່
       final user = await AuthService.instance.getMe();
       if (user != null) {
         await StorageService.instance.saveUser(user);
@@ -138,7 +159,6 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
         KycGateService.instance.syncFromBackend();
       }
 
-      // 3. navigate ໄປ home
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
         '/home',
         (_) => false,

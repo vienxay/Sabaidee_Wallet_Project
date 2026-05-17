@@ -31,7 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _loginWithGoogle() async {
-    final url = Uri.parse('${AppConstants.apiBaseUrl}/api/auth/google');
+    // state=register → server ຈະກວດວ່າ email ມີຢູ່ແລ້ວ
+    final url = Uri.parse('${AppConstants.apiBaseUrl}/api/auth/google?state=register');
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
