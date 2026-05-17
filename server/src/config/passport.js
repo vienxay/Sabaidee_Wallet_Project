@@ -23,29 +23,34 @@ passport.use(
         }
 
         const normalizedEmail = email.toLowerCase();
-        const name     = profile.displayName;
-        const googleId = profile.id;
+        const name        = profile.displayName;
+        const googleId    = profile.id;
+        // ດຶງຮູບ profile ຈາກ Google (URL ສາທາລະນະ)
+        const googlePhoto = profile.photos?.[0]?.value || null;
 
         // ─── user ມີຢູ່ແລ້ວ ─────────────────────────────────────────────
         let user = await User.findOne({ email: normalizedEmail });
         if (user) {
+          let changed = false;
+
           // ຕໍ່ Google ID ຖ້າ user ເຄີຍ register ດ້ວຍ email ກ່ອນ
-          if (!user.googleId) {
-            user.googleId = googleId;
-            await user.save({ validateBeforeSave: false });
+          if (!user.googleId) { user.googleId = googleId; changed = true; }
+
+          // sync ຮູບ Google ຖ້າ user ຍັງບໍ່ມີ profileImage
+          if (!user.profileImage && googlePhoto) {
+            user.profileImage = googlePhoto; changed = true;
           }
 
-          // ກວດວ່າ user ນີ້ມີ wallet ແລ້ວຫຼືບໍ່ — ຖ້າບໍ່ມີ ສ້າງໃຫ້
+          if (changed) await user.save({ validateBeforeSave: false });
+
+          // ກວດ wallet — ສ້າງໃຫ້ຖ້າຍັງບໍ່ມີ
           const existingWallet = await Wallet.findOne({ user: user._id });
-          if (!existingWallet) {
-            await _createWalletForUser(user, name);
-          }
+          if (!existingWallet) await _createWalletForUser(user, name);
 
           return done(null, user);
         }
 
         // ─── user ໃໝ່ ────────────────────────────────────────────────────
-        // ສ້າງ account + LNBits wallet ພ້ອມກັນ
         let walletResult;
         try {
           walletResult = await lnbits.createWallet(name);
@@ -57,11 +62,12 @@ passport.use(
           return done(new Error('ບໍ່ສາມາດສ້າງ Wallet ໄດ້'), false);
         }
 
-        // ສ້າງ user
+        // ສ້າງ user ພ້ອມ ຊື່ + ຮູບ ຈາກ Google ທັນທີ
         user = await User.create({
           name,
           email:           normalizedEmail,
           googleId,
+          profileImage:    googlePhoto,
           password:        crypto.randomBytes(32).toString('hex'),
           isGoogleAccount: true,
         });
