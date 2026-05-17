@@ -44,29 +44,46 @@ exports.getBalance = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        const [balanceResult, rate] = await Promise.all([
-            lnbits.getBalance(wallet.invoiceKey),
-            exchangeRate.getExchangeRate(),
-        ]);
+        const rate = await exchangeRate.getExchangeRate();
 
-        const balanceLAK = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
+        try {
+            // ພະຍາຍາມ sync ຈາກ LNBits ຕົວຈິງ
+            const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
+            const balanceLAK    = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
 
-        // ✅ sync ທັງ balanceSats ແລະ balanceLAK
-        wallet.balanceSats = balanceResult.balanceSats;
-        wallet.balanceLAK  = balanceLAK;
-        await wallet.save();
+            wallet.balanceSats = balanceResult.balanceSats;
+            wallet.balanceLAK  = balanceLAK;
+            await wallet.save();
 
-        res.status(200).json({
-            success: true,
-            balance: {
-                sats:     balanceResult.balanceSats,
-                msats:    balanceResult.balanceMsats,
-                lak:      balanceLAK,
-                btcToLAK: rate.btcToLAK,
-                btcToUSD: rate.btcToUSD,
-                rateAt:   rate.fetchedAt,
-            },
-        });
+            return res.status(200).json({
+                success: true,
+                balance: {
+                    sats:     balanceResult.balanceSats,
+                    msats:    balanceResult.balanceMsats,
+                    lak:      balanceLAK,
+                    btcToLAK: rate.btcToLAK,
+                    btcToUSD: rate.btcToUSD,
+                    rateAt:   rate.fetchedAt,
+                },
+            });
+        } catch (lnbitsErr) {
+            // LNBits ໄດ້ → fallback ໃຊ້ balance ຈາກ DB ທີ່ cache ໄວ້
+            console.warn('⚠️ LNBits unavailable, using cached balance:', lnbitsErr.message);
+            const cachedLAK = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
+
+            return res.status(200).json({
+                success:  true,
+                cached:   true, // flag ໃຫ້ Flutter ຮູ້ວ່າໃຊ້ cache
+                balance: {
+                    sats:     wallet.balanceSats,
+                    msats:    wallet.balanceSats * 1000,
+                    lak:      cachedLAK,
+                    btcToLAK: rate.btcToLAK,
+                    btcToUSD: rate.btcToUSD,
+                    rateAt:   rate.fetchedAt,
+                },
+            });
+        }
     } catch (error) {
         console.error('Get Balance Error:', error);
         return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });

@@ -11,12 +11,17 @@ const headers = (key) => ({
 
 const handleError = (error, label) => {
     const responseData = error.response?.data;
-    const status = error.response?.status;
+    const status       = error.response?.status;
 
     console.error(`LNbits [${label}] status:`, status);
     console.error(`LNbits [${label}] detail:`, JSON.stringify(responseData, null, 2));
 
-    const detail = responseData?.detail || responseData?.message || error.message;
+    // ຖ້າ error.response undefined = LNBits ບໍ່ໄດ້ run / connection refused
+    if (!error.response) {
+        throw new Error('ບໍ່ສາມາດເຊື່ອມຕໍ່ LNBits ໄດ້ — ກວດສອບວ່າ LNBits ກຳລັງ run ຢູ່');
+    }
+
+    const detail = responseData?.detail || responseData?.message || error.message || 'LNBits error';
     throw new Error(detail);
 };
 
