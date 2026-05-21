@@ -372,7 +372,7 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
         $match: {
         createdAt: { $gte: fromDate, $lte: toDate },
         status: 'success',
-        type: { $in: ['topup', 'payment', 'withdraw'] },
+        type: { $in: ['topup', 'pay', 'laoQR', 'withdraw'] },
         }
     },
     {
@@ -417,8 +417,11 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
     ])
 
     // ── ຄຳນວນກຳໄລ ──────────────────────────────────────────────────────
+    // ກຳໄລ = LAK ທີ່ user ຈ່າຍ × spread% ທີ່ admin ຕັ້ງ
+    // ຖ້າ spread = 0 → ບໍ່ມີກຳໄລ (ຕ້ອງ set spread ໃນ admin dashboard)
     const calcProfit = (totalLAK, type) => {
-      if (type === 'withdraw') return 0
+      if (type === 'withdraw' || type === 'failed') return 0
+      if (spreadPercent <= 0) return 0
       return Math.round(totalLAK * (spreadPercent / (100 + spreadPercent)))
     }
 
