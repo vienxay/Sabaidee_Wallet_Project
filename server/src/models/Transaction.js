@@ -11,7 +11,7 @@ const transactionSchema = new mongoose.Schema(
         wallet: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Wallet',
-            required: false,          // ✅ laoQR ບໍ່ມີ wallet (demo)
+            required: false,
         },
         type: {
             type: String,

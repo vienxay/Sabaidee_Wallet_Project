@@ -2,12 +2,13 @@ const axios = require('axios');
 const Rate  = require('../models/Rate');
 
 let cache = {
-    btcToUSD      : 0,
-    usdToLAK      : 0,      // ລາຄາຂາຍ (ລວມ spread)
-    usdToLAKBase  : 0,      // ລາຄາ admin ຕັ້ງ
-    spreadPercent : 0,
-    btcToLAK      : 0,
-    fetchedAt     : null,
+    btcToUSD        : 0,
+    usdToLAK        : 0,
+    usdToLAKBase    : 0,
+    spreadPercent   : 0,
+    laoQrFeePercent : 0,
+    btcToLAK        : 0,
+    fetchedAt       : null,
 };
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -35,9 +36,10 @@ exports.getExchangeRate = async () => {
     if (isCacheValid()) return { ...cache };
 
     try {
-        const rateDoc     = await Rate.findOne();
-        const usdToLAKBase = rateDoc?.usdToLAK     || 21000;
-        const spread       = rateDoc?.spreadPercent || 0;
+        const rateDoc        = await Rate.findOne();
+        const usdToLAKBase   = rateDoc?.usdToLAK        || 21000;
+        const spread         = rateDoc?.spreadPercent    || 0;
+        const laoQrFeePercent = rateDoc?.laoQrFeePercent || 0;
 
         // ✅ ຄຳນວນ spread
         const usdToLAK = Math.round(usdToLAKBase * (1 + spread / 100));
@@ -53,14 +55,15 @@ exports.getExchangeRate = async () => {
 
         cache = {
             btcToUSD,
-            usdToLAKBase,   // ✅ ລາຄາ admin ຕັ້ງ
-            usdToLAK,       // ✅ ລາຄາຂາຍ (ລວມ spread)
-            spreadPercent : spread,
+            usdToLAKBase,
+            usdToLAK,
+            spreadPercent   : spread,
+            laoQrFeePercent,
             btcToLAK,
-            fetchedAt     : new Date(),
+            fetchedAt       : new Date(),
         };
 
-        console.log(`💱 Base: ${usdToLAKBase} | Spread: ${spread}% | ຂາຍ: ${usdToLAK} | BTC: $${btcToUSD}`);
+        console.log(`💱 Base: ${usdToLAKBase} | Spread: ${spread}% | ຂາຍ: ${usdToLAK} | BTC: $${btcToUSD} | LAO QR fee: ${laoQrFeePercent}%`);
         return { ...cache };
 
     } catch (error) {

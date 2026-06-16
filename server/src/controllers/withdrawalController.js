@@ -124,6 +124,10 @@ exports.previewWithdrawal = async (req, res) => {
         // ── ຄຳນວນ sats ───────────────────────────────────────────────────────
         const amountSats = await exchangeRate.convertLAKToSats(amountLAK);
 
+        if (amountSats < 1) {
+            return res.status(400).json({ success: false, message: 'ຈຳນວນໜ້ອຍເກີນໄປ (ຕ່ຳສຸດ 1 sat)' });
+        }
+
         // ── ກວດ balance ──────────────────────────────────────────────────────
         if (wallet.balanceSats < amountSats) {
             return res.status(400).json({ success: false, message: 'ຍອດ sats ບໍ່ພໍ' });
@@ -205,6 +209,10 @@ exports.sendWithdrawal = async (req, res) => {
 
         // ── ຄຳນວນ sats ───────────────────────────────────────────────────────
         const amountSats = await exchangeRate.convertLAKToSats(amountLAK);
+
+        if (amountSats < 1) {
+            return res.status(400).json({ success: false, message: 'ຈຳນວນໜ້ອຍເກີນໄປ (ຕ່ຳສຸດ 1 sat)' });
+        }
 
         if (wallet.balanceSats < amountSats) {
             return res.status(400).json({ success: false, message: 'ຍອດ sats ບໍ່ພໍ' });

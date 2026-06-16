@@ -7,8 +7,9 @@ const Rate        = require('../models/Rate');
 const Kyc         = require('../models/Kyc');
 const axios       = require('axios');
 const { protect } = require('../middleware/authMiddleware');
-const exchangeRate = require('../services/exchangeRateService'); 
+const exchangeRate = require('../services/exchangeRateService');
 const Expense = require('../models/Expense')
+const { sendKycApprovedEmail, sendKycRejectedEmail } = require('../services/emailService');
 
 // ── Middleware ───────────────────────────────────────────────────────────
 const adminOnly = (req, res, next) => {
@@ -195,8 +196,22 @@ router.post('/kyc/review', protect, staffOrAdmin, async (req, res) => {
         if (!['verified', 'rejected'].includes(status))
             return res.status(400).json({ success: false, message: 'Status ບໍ່ຖືກຕ້ອງ' });
 
-        await User.findByIdAndUpdate(userId, { kycStatus: status });
-        await Kyc.findOneAndUpdate({ user: userId }, { status, note });
+        const [updatedUser] = await Promise.all([
+            User.findByIdAndUpdate(userId, { kycStatus: status }, { new: true }),
+            Kyc.findOneAndUpdate({ user: userId }, { status, note }),
+        ]);
+
+        if (updatedUser?.email) {
+            try {
+                if (status === 'verified') {
+                    await sendKycApprovedEmail(updatedUser.email, updatedUser.name);
+                } else if (status === 'rejected') {
+                    await sendKycRejectedEmail(updatedUser.email, updatedUser.name, note || '');
+                }
+            } catch (emailErr) {
+                console.error('KYC email error:', emailErr.message);
+            }
+        }
 
         return res.json({ success: true, message: 'ອັບເດດ KYC ສຳເລັດ' });
     } catch (error) {
@@ -219,12 +234,13 @@ router.get('/rate', protect, staffOrAdmin, async (req, res) => {
         return res.json({
             success: true,
             rate: {
-                usdToLAK,                    // ✅ ລາຄາຂາຍ (ລວມ spread)
-                usdToLAKBase,               // ✅ base rate
-                spreadPercent : spread,
+                usdToLAK,
+                usdToLAKBase,
+                spreadPercent    : spread,
+                laoQrFeePercent  : rateDoc?.laoQrFeePercent || 0,
                 btcToUSD,
-                btcToLAK,                   // ✅ ລວມ spread
-                updatedAt     : rateDoc?.updatedAt,
+                btcToLAK,
+                updatedAt        : rateDoc?.updatedAt,
             },
         });
     } catch (error) {
@@ -235,7 +251,7 @@ router.get('/rate', protect, staffOrAdmin, async (req, res) => {
 // ── POST /api/admin/rate/update ──────────────────────────────────────────
 router.post('/rate/update', protect, adminOnly, async (req, res) => {
     try {
-        const { usdToLAK, spreadPercent } = req.body; // ✅ ຮັບທັງ 2
+        const { usdToLAK, spreadPercent, laoQrFeePercent } = req.body;
 
         if (!usdToLAK || usdToLAK <= 0)
             return res.status(400).json({ success: false, message: 'ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ' });
@@ -243,8 +259,12 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
         if (spreadPercent === undefined || spreadPercent < 0)
             return res.status(400).json({ success: false, message: 'ໃສ່ Spread % ທີ່ຖືກຕ້ອງ (0 ຂຶ້ນໄປ)' });
 
+        if (laoQrFeePercent !== undefined && laoQrFeePercent < 0)
+            return res.status(400).json({ success: false, message: 'ຄ່າທຳນຽມ LAO QR ຕ້ອງ >= 0' });
+
         const rounded      = Math.round(usdToLAK);
         const spread       = parseFloat(spreadPercent) || 0;
+        const laoQrFee     = parseFloat(laoQrFeePercent) || 0;
         // ✅ ຄຳນວນລາຄາຂາຍລວມ spread
         const usdToLAKSell = Math.round(rounded * (1 + spread / 100));
 
@@ -278,17 +298,18 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
         const rate = await Rate.findOneAndUpdate(
             {},
             {
-                usdToLAK      : rounded,       // ✅ base rate
-                spreadPercent : spread,         // ✅ spread %
+                usdToLAK        : rounded,
+                spreadPercent   : spread,
+                laoQrFeePercent : laoQrFee,
                 btcToUSD,
-                btcToLAK,                      // ✅ ລວມ spread
+                btcToLAK,
             },
             { returnDocument: 'after', upsert: true }
         );
 
         exchangeRate.clearCache();
 
-        console.log(`✅ Rate: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD}`);
+        console.log(`✅ Rate: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD} | LAO QR fee=${laoQrFee}%`);
         return res.json({ success: true, message: 'ອັບເດດ Rate ສຳເລັດ', rate });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });

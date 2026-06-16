@@ -118,8 +118,8 @@ exports.getRate = async (req, res) => {
 exports.topUp = async (req, res) => {
     try {
         const { amountSats, memo } = req.body;
-        if (!amountSats || amountSats <= 0)
-            return res.status(400).json({ success: false, message: 'ກະລຸນາລະບຸຈຳນວນ sats' });
+        if (!amountSats || amountSats < 1)
+            return res.status(400).json({ success: false, message: 'ຕ່ຳສຸດ 1 sat' });
 
         const wallet = await Wallet.findOne({ user: req.user._id });
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
@@ -198,8 +198,8 @@ exports.withdraw = async (req, res) => {
 
         // ✅ sync ທັງ balanceSats ແລະ balanceLAK
         const newBalanceSats  = balanceResult.balanceSats - decoded.amountSats - (payResult.feeSats || 0);
-        wallet.balanceSats    = newBalanceSats;
-        wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(newBalanceSats);
+        wallet.balanceSats    = Math.max(0, newBalanceSats);
+        wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
         const transaction = await Transaction.create({

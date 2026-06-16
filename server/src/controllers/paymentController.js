@@ -317,7 +317,19 @@ exports.payLaoQR = async (req, res) => {
         const userId = req.user._id;
         const { amountLAK, merchantName, bank, qrRaw, description } = req.body;
 
-        const kyc = await Kyc.findOne({ user: userId });
+        if (!amountLAK || amountLAK <= 0) {
+            return res.status(400).json({ success: false, message: 'ກະລຸນາລະບຸຈຳນວນເງິນ' });
+        }
+
+        const [kyc, wallet] = await Promise.all([
+            Kyc.findOne({ user: userId }),
+            Wallet.findOne({ user: userId }).select('+adminKey'),
+        ]);
+
+        if (!wallet) {
+            return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
+        }
+
         const isKYCVerified = kyc?.status === 'verified';
         const dailyLimit = isKYCVerified ? LAO_QR_LIMIT.verified : LAO_QR_LIMIT.unverified;
 
@@ -355,20 +367,48 @@ exports.payLaoQR = async (req, res) => {
             exchangeRate.getExchangeRate(),
         ]);
 
+        // ── ຄ່າທຳນຽມ LAO QR (admin ຕັ້ງໃນ Rate) ───────────────────────────────
+        const feePercent = rate.laoQrFeePercent || 0;
+        const feeSats    = Math.ceil(amountSats * feePercent / 100);
+        const feeLAK     = Math.round(amountLAK * feePercent / 100);
+        const totalSats  = amountSats + feeSats;
+
+        // ── ກວດ sats ພໍຈ່າຍ (ລວມຄ່າທຳນຽມ) ──────────────────────────────────
+        if (wallet.balanceSats <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ຍອດເງິນ sats ໝົດແລ້ວ — ກະລຸນາ TopUp ກ່ອນ',
+            });
+        }
+        if (wallet.balanceSats < totalSats) {
+            return res.status(400).json({
+                success: false,
+                message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats ລວມຄ່າທຳນຽມ, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
+            });
+        }
+
+        // ── ຕັດ sats (ລວມຄ່າທຳນຽມ) ອອກຈາກ wallet ──────────────────────────────
+        wallet.balanceSats = Math.max(0, wallet.balanceSats - totalSats);
+        wallet.balanceLAK  = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
+        await wallet.save();
+
         const tx = await Transaction.create({
-            user: userId,
-            type: 'laoQR',
+            user:   userId,
+            wallet: wallet._id,
+            type:   'laoQR',
             status: 'success',
             amountSats,
             amountLAK,
+            feeSats,
             merchantName: merchantName || 'ຮ້ານຄ້າ',
-            bank: bank || '',
-            qrRaw: qrRaw || '',
-            memo: description || 'LAO QR Payment',
-            kycVerified: isKYCVerified,
+            bank:         bank || '',
+            qrRaw:        qrRaw || '',
+            memo:         description || 'LAO QR Payment',
+            kycVerified:  isKYCVerified,
             exchangeRate: {
-                btcToLAK: rate.btcToLAK,
-                btcToUSD: rate.btcToUSD,
+                btcToLAK:  rate.btcToLAK,
+                btcToUSD:  rate.btcToUSD,
+                usdToLAK:  rate.usdToLAK,
                 fetchedAt: rate.fetchedAt,
             },
         });
@@ -377,9 +417,20 @@ exports.payLaoQR = async (req, res) => {
             success: true,
             message: 'ສົ່ງເງິນສຳເລັດ',
             todaySpent: todaySpent + amountLAK,
-            remaining: remaining - amountLAK,
+            remaining:  remaining - amountLAK,
             dailyLimit,
             transactionId: tx._id,
+            payment: {
+                amountSats,
+                amountLAK,
+                feeSats,
+                feeLAK,
+                feePercent,
+                totalSats,
+                balanceSats: wallet.balanceSats,
+                balanceLAK:  wallet.balanceLAK,
+                rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
+            },
         });
     } catch (error) {
         console.error('LAO QR Pay Error:', error);
@@ -393,7 +444,10 @@ exports.payLaoQR = async (req, res) => {
 exports.getLaoQRLimitStatus = async (req, res) => {
     try {
         const userId = req.user._id;
-        const kyc = await Kyc.findOne({ user: userId });
+        const [kyc, rate] = await Promise.all([
+            Kyc.findOne({ user: userId }),
+            exchangeRate.getExchangeRate(),
+        ]);
         const isKYCVerified = kyc?.status === 'verified';
         const dailyLimit = isKYCVerified ? LAO_QR_LIMIT.verified : LAO_QR_LIMIT.unverified;
 
@@ -406,7 +460,8 @@ exports.getLaoQRLimitStatus = async (req, res) => {
             dailyLimit,
             todaySpent,
             remaining,
-            percentage: Math.min(Math.round((todaySpent / dailyLimit) * 100), 100),
+            percentage       : Math.min(Math.round((todaySpent / dailyLimit) * 100), 100),
+            laoQrFeePercent  : rate.laoQrFeePercent || 0,
         });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });

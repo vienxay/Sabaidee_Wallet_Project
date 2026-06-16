@@ -20,6 +20,12 @@ exports.register = async (req, res) => {
         if (!name || !email || !password)
             return res.status(400).json({ success: false, message: 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ' });
 
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+            return res.status(400).json({ success: false, message: 'ຮູບແບບ Email ບໍ່ຖືກຕ້ອງ' });
+
+        if (password.length < 6)
+            return res.status(400).json({ success: false, message: 'ລະຫັດຜ່ານຕ້ອງມີຢ່າງໜ້ອຍ 6 ຕົວອັກສອນ' });
+
         const existingUser = await User.findOne({ email: email.toLowerCase() });
         if (existingUser)
             return res.status(409).json({ success: false, message: 'Email ນີ້ຖືກໃຊ້ງານແລ້ວ' });
