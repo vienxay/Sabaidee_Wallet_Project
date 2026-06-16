@@ -101,7 +101,7 @@ class KycGateService {
 
   // ── Gate ──────────────────────────────────────────────────────────────────
   // ກວດ amount ທຽບກັບ limit ຕາມ KYC status:
-  //   unverified: 2M LAK/ມື້, verified: 100M LAK/ມື້ (demo limit)
+  //   unverified: 2M LAK/ມື້, verified: 100M LAK/ມື້
   // ຖ້າ amount ເກີນ → ສະແດງ sheet ທີ່ເໝາະສົມ ຕາມ KYC state
   Future<bool> checkAndGate({
     required BuildContext context,

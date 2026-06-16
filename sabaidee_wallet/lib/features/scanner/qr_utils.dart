@@ -46,7 +46,7 @@ QRType detectQRType(String raw) {
     return QRType.laoQR;
   }
 
-  // ── 5. Demo LaoQR ────────────────────────────────────────────────────────
+  // ── 5. LAO QR format fallback ────────────────────────────────────────────
   if (RegExp(r'^\d{8,15}$').hasMatch(trimmed) ||
       RegExp(r'^[0-9A-Z]{8,}$').hasMatch(trimmed.toUpperCase())) {
     return QRType.laoQR;

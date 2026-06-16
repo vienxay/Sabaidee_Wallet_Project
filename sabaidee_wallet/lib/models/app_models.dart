@@ -61,7 +61,7 @@ class UserModel {
 
 // ─── Wallet Model ─────────────────────────────────────────────────────────────
 /// ຂໍ້ມູນ LNBits wallet ຂອງ user
-/// balanceSats = ຍອດ Bitcoin (satoshi), balanceLAK = ຍອດກີບ (demo)
+/// balanceSats = ຍອດ Bitcoin (satoshi), balanceLAK = ຍອດກີບ
 class WalletModel {
   final String walletId;
   final String walletName;
@@ -229,10 +229,11 @@ class DecodedInvoiceModel {
 /// ຂໍ້ມູນວົງເງິນ LAO QR ລາຍວັນຂອງ user
 class LaoQRLimitModel {
   final bool isKYCVerified;
-  final int dailyLimit;    // ວົງເງິນທັງໝົດຕໍ່ມື້ (LAK)
-  final int todaySpent;    // ໃຊ້ໄປແລ້ວວັນນີ້ (LAK)
-  final int remaining;     // ຍັງໃຊ້ໄດ້ (LAK)
-  final int percentage;    // % ທີ່ໃຊ້ໄປ (0-100)
+  final int dailyLimit;
+  final int todaySpent;
+  final int remaining;
+  final int percentage;
+  final double laoQrFeePercent; // ຄ່າທຳນຽມ % ທີ່ admin ຕັ້ງ
 
   const LaoQRLimitModel({
     required this.isKYCVerified,
@@ -240,14 +241,16 @@ class LaoQRLimitModel {
     required this.todaySpent,
     required this.remaining,
     required this.percentage,
+    this.laoQrFeePercent = 0,
   });
 
   factory LaoQRLimitModel.fromJson(Map<String, dynamic> j) => LaoQRLimitModel(
-    isKYCVerified: j['isKYCVerified'] ?? false,
-    dailyLimit:    j['dailyLimit']    ?? 2000000,
-    todaySpent:    j['todaySpent']    ?? 0,
-    remaining:     j['remaining']     ?? 2000000,
-    percentage:    j['percentage']    ?? 0,
+    isKYCVerified:   j['isKYCVerified']   ?? false,
+    dailyLimit:      j['dailyLimit']       ?? 2000000,
+    todaySpent:      j['todaySpent']       ?? 0,
+    remaining:       j['remaining']        ?? 2000000,
+    percentage:      j['percentage']       ?? 0,
+    laoQrFeePercent: (j['laoQrFeePercent'] as num?)?.toDouble() ?? 0,
   );
 }
 

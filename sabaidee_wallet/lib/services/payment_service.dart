@@ -1,7 +1,7 @@
 // ຈັດການ Payment ທຸກປະເພດ:
-//   ⚡ Lightning (BOLT11, LNURL, Lightning Address) — ເງິນຈິງ sats
-//   🇱🇦 LAO QR — demo money (ຍັງບໍ່ເຊື່ອມ LAPNET)
-//   🔄 Internal Transfer — demo (server ຍັງ implement ບໍ່ຄົບ)
+//   ⚡ Lightning (BOLT11, LNURL, Lightning Address) — ຈ່າຍ sats ຕົວຈິງ
+//   🇱🇦 LAO QR — ຕັດ sats ພາຍໃນ (ສຳລັບຮ້ານຄ້າທີ່ຮັບ QR)
+//   🔄 Internal Transfer — ຍັງ implement ບໍ່ຄົບ
 import '../core/core.dart';
 import '../models/app_models.dart';
 import 'api_client.dart';
@@ -73,9 +73,8 @@ class PaymentService {
     return WalletResult.failure(res.message);
   }
 
-  // ─── LAO QR (Demo) ────────────────────────────────────────────────────────
-  // ຈ່າຍ LAO QR — server ບັນທຶກ transaction ແຕ່ ບໍ່ call LAPNET API ຕົວຈິງ
-  // ເມື່ອ LAPNET API ພ້ອມ → ແກ້ server-side ດຽວ Flutter ບໍ່ຕ້ອງ change
+  // ─── LAO QR ───────────────────────────────────────────────────────────────
+  // ຈ່າຍ LAO QR — ແປງ LAK → sats ແລ້ວຕັດ balance ພາຍໃນ
   Future<WalletResult<Map<String, dynamic>>> payLaoQR({
     required int amountLAK,
     String merchantName = '',

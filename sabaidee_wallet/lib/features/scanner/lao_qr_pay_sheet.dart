@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../models/app_models.dart';
 import '../../services/payment_service.dart';
+import '../payment/payment_error_dialog.dart';
 import '../payment/payment_success_screen.dart';
 import 'qr_utils.dart';
 
@@ -31,6 +32,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
   bool _loading = false;
   int _todaySpent = 0;
   int _dailyLimit = 2000000;
+  double _feePercent = 0;
   bool _limitLoaded = false;
 
   static const _quickAmounts = ['10000', '20000', '50000', '100000'];
@@ -54,6 +56,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
       setState(() {
         _todaySpent = result.data!.todaySpent;
         _dailyLimit = result.data!.dailyLimit;
+        _feePercent = result.data!.laoQrFeePercent;
         _limitLoaded = true;
       });
     } else {
@@ -62,6 +65,17 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
   }
 
   int get _remaining => _dailyLimit - _todaySpent;
+
+  int get _inputAmount {
+    final raw = _amountCtrl.text.trim().replaceAll(',', '');
+    return int.tryParse(raw) ?? 0;
+  }
+
+  int get _feeLAK => (_feePercent > 0 && _inputAmount > 0)
+      ? (_inputAmount * _feePercent / 100).ceil()
+      : 0;
+
+  int get _totalLAK => _inputAmount + _feeLAK;
 
   String _fmt(int n) => n.toString().replaceAllMapped(
     RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -92,6 +106,9 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
     setState(() => _loading = false);
 
     if (result.success) {
+      final payment = result.data?['payment'] as Map<String, dynamic>?;
+      final satsDeducted = (payment?['amountSats'] as num?)?.toInt() ?? 0;
+
       localNav.pop();
       widget.onSuccess?.call();
       if (!mounted) return;
@@ -103,20 +120,22 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
           senderName: 'Sabaidee Wallet',
           receiverName: widget.qrInfo.merchantName,
           amountLAK: amount.toDouble(),
-          amountSats: 0,
+          amountSats: satsDeducted,
           closeToHome: true,
         ),
       );
     } else if (result.requireKYC) {
-      _showKycDialog(result.message.isNotEmpty ? result.message : 'ເກີນວົງເງິນ — ຕ້ອງຢືນຢັນ KYC');
+      _showKycDialog(
+        result.message.isNotEmpty
+            ? result.message
+            : 'ເກີນວົງເງິນ — ຕ້ອງຢືນຢັນ KYC',
+      );
     } else {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text(result.message.isNotEmpty ? result.message : 'ເກີດຂໍ້ຜິດພາດ'),
-          backgroundColor: const Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-        ));
+      final msg = result.message.isNotEmpty ? result.message : 'ເກີດຂໍ້ຜິດພາດ';
+      PaymentErrorDialog.show(
+        context,
+        errorInfo: PaymentErrorInfo.fromApiResponse({'message': msg}),
+      );
     }
   }
 
@@ -175,7 +194,13 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
 
                     // ── Quick chips ──
                     _buildQuickChips(),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
+
+                    // ── ສະຫຼຸບຄ່າທຳນຽມ ──
+                    if (_limitLoaded && _inputAmount > 0) ...[
+                      _buildFeeSummary(),
+                      const SizedBox(height: 16),
+                    ],
 
                     // ── ສົ່ງເງິນ button ──
                     _buildPayButton(),
@@ -278,7 +303,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
 
           // ── ຫາ (Merchant) ──
           _buildPartyRow(
-            label: 'ທາບັນຊີ',
+            label: 'ຫາາບັນຊີ',
             name: widget.qrInfo.merchantName,
             account: widget.qrInfo.bank,
             icon: Icons.store_mall_directory_outlined,
@@ -340,6 +365,66 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
             ),
           ),
         ],
+      ),
+    ],
+  );
+
+  // ── Fee Summary ──────────────────────────────────────────────────────────
+  Widget _buildFeeSummary() {
+    final hasFee = _feePercent > 0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8F0),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFE8820C).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        children: [
+          _feeRow('ຈຳນວນທີ່ຈ່າຍ', '${_fmt(_inputAmount)} ກີບ', bold: false),
+          if (hasFee) ...[
+            const SizedBox(height: 6),
+            _feeRow(
+              'ຄ່າທຳນຽມ (${_feePercent.toStringAsFixed(1)}%)',
+              '${_fmt(_feeLAK)} ກີບ',
+              color: const Color(0xFFE8820C),
+            ),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(height: 1),
+          ),
+          _feeRow('ລວມທັງໝົດ', '${_fmt(_totalLAK)} ກີບ', bold: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _feeRow(
+    String label,
+    String value, {
+    bool bold = false,
+    Color? color,
+  }) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          color: color ?? Colors.grey[700],
+          fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+        ),
+      ),
+      Text(
+        value,
+        style: TextStyle(
+          fontSize: 13,
+          color: color ?? (bold ? const Color(0xFF1A1A1A) : Colors.grey[700]),
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+        ),
       ),
     ],
   );
@@ -515,7 +600,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
               ),
             )
           : const Text(
-              'ສົ່ງເງິນ',
+              'ຈ່າຍເງິນ',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -541,7 +626,10 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
             Text('ຕ້ອງຢືນຢັນ KYC'),
           ],
         ),
-        content: Text(message, style: const TextStyle(fontSize: 14, height: 1.5)),
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, height: 1.5),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),

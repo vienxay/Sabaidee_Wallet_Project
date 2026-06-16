@@ -12,8 +12,9 @@ class RateTab extends StatefulWidget {
 
 class _RateTabState extends State<RateTab> {
   final _api = ApiClient.instance;
-  final _usdController = TextEditingController();
+  final _usdController    = TextEditingController();
   final _spreadController = TextEditingController();
+  final _laoQrFeeCtrl     = TextEditingController();
   final _fmt = NumberFormat('#,##0', 'en_US');
   bool _loading = false;
   Map? _currentRate;
@@ -28,6 +29,7 @@ class _RateTabState extends State<RateTab> {
   void dispose() {
     _usdController.dispose();
     _spreadController.dispose();
+    _laoQrFeeCtrl.dispose();
     super.dispose();
   }
 
@@ -46,8 +48,8 @@ class _RateTabState extends State<RateTab> {
           _usdController.text =
               (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0)
                   .toString();
-          _spreadController.text = (_currentRate!['spreadPercent'] ?? 0)
-              .toString();
+          _spreadController.text = (_currentRate!['spreadPercent'] ?? 0).toString();
+          _laoQrFeeCtrl.text     = (_currentRate!['laoQrFeePercent'] ?? 0).toString();
         });
       }
     } finally {
@@ -64,25 +66,30 @@ class _RateTabState extends State<RateTab> {
   }
 
   Future<void> _update() async {
-    final usdToLAK = double.tryParse(_usdController.text);
-    final spreadPercent = double.tryParse(_spreadController.text) ?? 0;
+    final usdToLAK       = double.tryParse(_usdController.text);
+    final spreadPercent  = double.tryParse(_spreadController.text) ?? 0;
+    final laoQrFeePercent = double.tryParse(_laoQrFeeCtrl.text) ?? 0;
 
     if (usdToLAK == null || usdToLAK <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ')));
       return;
     }
     if (spreadPercent < 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Spread % ຕ້ອງ >= 0')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Spread % ຕ້ອງ >= 0')));
+      return;
+    }
+    if (laoQrFeePercent < 0) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('ຄ່າທຳນຽມ LAO QR ຕ້ອງ >= 0')));
       return;
     }
 
     final res = await _api.post(AppConstants.adminUpdateRate, {
-      'usdToLAK': usdToLAK,
-      'spreadPercent': spreadPercent,
+      'usdToLAK':        usdToLAK,
+      'spreadPercent':   spreadPercent,
+      'laoQrFeePercent': laoQrFeePercent,
     });
 
     if (!mounted) return;
@@ -203,19 +210,40 @@ class _RateTabState extends State<RateTab> {
                   const SizedBox(height: 12),
 
                   const Text(
-                    'Spread % (ກຳໄລ)',
+                    'Spread % (ກຳໄລ BTC Exchange)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _spreadController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: 'Spread %',
                       hintText: '0 = ບໍ່ມີ spread',
+                      border: OutlineInputBorder(),
+                      suffixText: '%',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  const Text(
+                    'ຄ່າທຳນຽມ LAO QR (%)',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'ຫັກຈາກທຸກການຈ່າຍ QR ຮ້ານຄ້າ — ກຳໄລຂອງແອັບ',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _laoQrFeeCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'ຄ່າທຳນຽມ LAO QR %',
+                      hintText: '0 = ບໍ່ມີຄ່າທຳນຽມ',
                       border: OutlineInputBorder(),
                       suffixText: '%',
                     ),

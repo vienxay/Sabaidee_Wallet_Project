@@ -37,7 +37,7 @@ class AppConstants {
   // ─── Payment Endpoints ───────────────────────────────────────────────────
   static const String paymentPay            = '/api/payment/pay';           // ຈ່າຍ Lightning invoice
   static const String paymentDecode         = '/api/payment/decode';        // ຖອດລະຫັດ invoice ກ່ອນຈ່າຍ
-  static const paymentLaoQR                 = '/api/payment/laoqr/pay';     // ຈ່າຍ LAO QR (demo)
+  static const paymentLaoQR                 = '/api/payment/laoqr/pay';
   static const paymentLaoQRLimit            = '/api/payment/laoqr/limit-status'; // ວົງເງິນ LAO QR
   static const paymentTransfer              = '/api/payment/transfer';      // ໂອນລະຫວ່າງ wallet (ຍັງ implement ບໍ່ຄົບ)
   static const paymentTransferLookup        = '/api/payment/transfer/lookup';

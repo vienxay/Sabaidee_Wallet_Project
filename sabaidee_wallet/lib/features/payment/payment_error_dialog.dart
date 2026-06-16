@@ -32,9 +32,16 @@ class PaymentErrorInfo {
     PaymentErrorType type;
     if (requireKYC || msg.contains('kyc')) {
       type = PaymentErrorType.requireKYC;
-    } else if (msg.contains('limit') || msg.contains('ເກີນ')) {
+    } else if (msg.contains('limit') || msg.contains('ເກີນ') || msg.contains('ວົງເງິນ')) {
       type = PaymentErrorType.limitExceeded;
-    } else if (msg.contains('sats') || msg.contains('ຍອດເງິນ')) {
+    } else if (
+      msg.contains('sat') ||
+      msg.contains('ຍອດ') ||
+      msg.contains('ບໍ່ພໍ') ||
+      msg.contains('ໝົດ') ||
+      msg.contains('ບໍ່ພຽງພໍ') ||
+      msg.contains('insufficient')
+    ) {
       type = PaymentErrorType.insufficientFunds;
     } else if (msg.contains('invoice')) {
       type = PaymentErrorType.invalidInvoice;

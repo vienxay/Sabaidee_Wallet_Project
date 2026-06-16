@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../services/withdrawal_service.dart';
+import '../payment/payment_error_dialog.dart';
 import 'withdraw_success_screen.dart';
 import '../../features/scanner/qr_scanner_screen.dart';
 
@@ -208,13 +209,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+    PaymentErrorDialog.show(
+      context,
+      errorInfo: PaymentErrorInfo.fromApiResponse({'message': msg}),
     );
   }
 
@@ -341,7 +338,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               validator: (v) {
                 final val = double.tryParse(v?.replaceAll(',', '') ?? '') ?? 0;
                 if (val <= 0) return 'ກະລຸນາໃສ່ຈຳນວນ';
-                if (val < 100) return 'ຖອນຂັ້ນຕ່ຳ 100 sats';
+                if (val < 1) return 'ຖອນຂັ້ນຕ່ຳ 1 sat';
                 if (val > widget.balanceSats) return 'ຍອດ sats ບໍ່ພໍ';
                 return null;
               },

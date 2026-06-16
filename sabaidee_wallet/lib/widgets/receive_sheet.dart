@@ -60,10 +60,10 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     // ✅ LAK → sats
     final sats = ((lak / rate.btcToLAK) * 100_000_000).round();
 
-    if (sats <= 0) {
+    if (sats < 1) {
       setState(() {
         _loading = false;
-        _error = 'ຈຳນວນ LAK ໜ້ອຍເກີນໄປ';
+        _error = 'ຈຳນວນ LAK ໜ້ອຍເກີນໄປ (ຕ່ຳສຸດ 1 sat)';
       });
       return;
     }
