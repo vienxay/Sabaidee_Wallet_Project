@@ -47,20 +47,24 @@ exports.getBalance = async (req, res) => {
         const rate = await exchangeRate.getExchangeRate();
 
         try {
-            // ພະຍາຍາມ sync ຈາກ LNBits ຕົວຈິງ
-            const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
-            const balanceLAK    = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
+            const lnbitsResult  = await lnbits.getBalance(wallet.invoiceKey);
+            const lnbitsCurrent = lnbitsResult.balanceSats;
 
-            wallet.balanceSats = balanceResult.balanceSats;
-            wallet.balanceLAK  = balanceLAK;
+            // ຄຳນວນ delta: ຖ້າ LNBits ເພີ່ມຂຶ້ນ = ມີ topup ໃໝ່ເຂົ້າ
+            const lnbitsBase = wallet.lnbitsBaseSats ?? lnbitsCurrent;
+            const topupDelta = Math.max(0, lnbitsCurrent - lnbitsBase);
+
+            wallet.balanceSats     = Math.max(0, wallet.balanceSats + topupDelta);
+            wallet.lnbitsBaseSats  = lnbitsCurrent;
+            wallet.balanceLAK      = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
             await wallet.save();
 
             return res.status(200).json({
                 success: true,
                 balance: {
-                    sats:     balanceResult.balanceSats,
-                    msats:    balanceResult.balanceMsats,
-                    lak:      balanceLAK,
+                    sats:     wallet.balanceSats,
+                    msats:    wallet.balanceSats * 1000,
+                    lak:      wallet.balanceLAK,
                     btcToLAK: rate.btcToLAK,
                     btcToUSD: rate.btcToUSD,
                     rateAt:   rate.fetchedAt,
@@ -181,13 +185,13 @@ exports.withdraw = async (req, res) => {
         const wallet = await Wallet.findOne({ user: req.user._id }).select('+adminKey');
         if (!wallet) return res.status(404).json({ success: false, message: 'ບໍ່ພົບ Wallet' });
 
-        const [decoded, rate, balanceResult] = await Promise.all([
+        const [decoded, rate] = await Promise.all([
             lnbits.decodeInvoice(paymentRequest),
             exchangeRate.getExchangeRate(),
-            lnbits.getBalance(wallet.invoiceKey),
         ]);
 
-        if (balanceResult.balanceSats < decoded.amountSats)
+        // ກວດ balance ຈາກ DB (ຮຮັກສາ laoQR deductions)
+        if (wallet.balanceSats < decoded.amountSats)
             return res.status(400).json({ success: false, message: 'ຍອດເງິນ sats ບໍ່ພໍ' });
 
         const amountLAK = await exchangeRate.convertSatsToLAK(decoded.amountSats);
@@ -196,9 +200,10 @@ exports.withdraw = async (req, res) => {
             paymentRequest,
         });
 
-        // ✅ sync ທັງ balanceSats ແລະ balanceLAK
-        const newBalanceSats  = balanceResult.balanceSats - decoded.amountSats - (payResult.feeSats || 0);
+        const lnbitsAfter     = await lnbits.getBalance(wallet.invoiceKey);
+        const newBalanceSats  = wallet.balanceSats - decoded.amountSats - (payResult.feeSats || 0);
         wallet.balanceSats    = Math.max(0, newBalanceSats);
+        wallet.lnbitsBaseSats = lnbitsAfter.balanceSats;
         wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
@@ -261,10 +266,11 @@ exports.checkPaymentStatus = async (req, res) => {
                 { status: 'success' },
             );
 
-            // ✅ sync ທັງ balanceSats ແລະ balanceLAK
-            const balanceResult  = await lnbits.getBalance(wallet.invoiceKey);
-            wallet.balanceSats   = balanceResult.balanceSats;
-            wallet.balanceLAK    = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
+            // Topup ສຳເລັດ → sync LNBits ເຕັມ (LNBits ຄືແຫຼ່ງຂໍ້ມູນ)
+            const balanceResult   = await lnbits.getBalance(wallet.invoiceKey);
+            wallet.balanceSats    = balanceResult.balanceSats;
+            wallet.lnbitsBaseSats = balanceResult.balanceSats;
+            wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
             await wallet.save();
         }
 

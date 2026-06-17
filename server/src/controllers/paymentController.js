@@ -158,10 +158,7 @@ exports.pay = async (req, res) => {
         const isAddr     = isLightningAddress(input);
         const isLNURLInput = isLNURL(input);
 
-        const [rate, balanceResult] = await Promise.all([
-            exchangeRate.getExchangeRate(),
-            lnbits.getBalance(wallet.invoiceKey),
-        ]);
+        const rate = await exchangeRate.getExchangeRate();
 
         let finalInvoice = input;
         let amountSats   = parseInt(amount, 10) || 0;
@@ -220,8 +217,8 @@ exports.pay = async (req, res) => {
             });
         }
 
-        // ✅ ກວດວ່າ LNBits balance ຕ້ອງ > 0 ກ່ອນ
-        if (balanceResult.balanceSats <= 0) {
+        // ກວດ balance ຈາກ DB (ຮຮັກສາ laoQR deductions)
+        if (wallet.balanceSats <= 0) {
             return res.status(400).json({
                 success: false,
                 message: 'ຍອດເງິນ sats ໝົດແລ້ວ — ກະລຸນາ TopUp ກ່ອນ',
@@ -229,10 +226,10 @@ exports.pay = async (req, res) => {
         }
 
         const MIN_RESERVE_SATS = 10;
-        if (balanceResult.balanceSats < totalSats + MIN_RESERVE_SATS) {
+        if (wallet.balanceSats < totalSats + MIN_RESERVE_SATS) {
             return res.status(400).json({
                 success: false,
-                message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats ລວມຄ່າທຳນຽມ, ມີ ${balanceResult.balanceSats.toLocaleString()} sats)`,
+                message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats ລວມຄ່າທຳນຽມ, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
             });
         }
 
@@ -242,9 +239,10 @@ exports.pay = async (req, res) => {
         });
 
         // ດຶງ balance ຈາກ LNBits ຫຼັງຈ່າຍ ແລ້ວຫັກຄ່າທຳນຽມ admin ອີກ
-        const newBalance   = await lnbits.getBalance(wallet.invoiceKey);
-        wallet.balanceSats = Math.max(0, newBalance.balanceSats - feeSats);
-        wallet.balanceLAK  = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
+        const newBalance      = await lnbits.getBalance(wallet.invoiceKey);
+        wallet.balanceSats    = Math.max(0, newBalance.balanceSats - feeSats);
+        wallet.lnbitsBaseSats = newBalance.balanceSats; // track LNBits ຫຼັງຈ່າຍ (ບໍ່ລວມ fee)
+        wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
         const transaction = await Transaction.create({
@@ -375,6 +373,13 @@ exports.payLaoQR = async (req, res) => {
             exchangeRate.getExchangeRate(),
         ]);
 
+        if (!amountSats || amountSats <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'ຈຳນວນ sats ຕ່ຳເກີນໄປ — ກະລຸນາ admin ຕັ້ງ Rate ໃຫ້ຖືກຕ້ອງ',
+            });
+        }
+
         // ── ຄ່າທຳນຽມ LAO QR (admin ຕັ້ງໃນ Rate) ───────────────────────────────
         const feePercent = rate.laoQrFeePercent || 0;
         const feeSats    = Math.ceil(amountSats * feePercent / 100);
@@ -396,8 +401,11 @@ exports.payLaoQR = async (req, res) => {
         }
 
         // ── ຕັດ sats (ລວມຄ່າທຳນຽມ) ອອກຈາກ wallet ──────────────────────────────
-        wallet.balanceSats = Math.max(0, wallet.balanceSats - totalSats);
-        wallet.balanceLAK  = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
+        // ບັນທຶກ LNBits baseline ກ່ອນ (LNBits ບໍ່ປ່ຽນສຳລັບ laoQR)
+        const lnbitsSnap      = await lnbits.getBalance(wallet.invoiceKey);
+        wallet.lnbitsBaseSats = lnbitsSnap.balanceSats;
+        wallet.balanceSats    = Math.max(0, wallet.balanceSats - totalSats);
+        wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
         const tx = await Transaction.create({

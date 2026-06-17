@@ -36,6 +36,11 @@ const walletSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        // ຄ່າ LNBits ທີ່ເກັບໄວ້ຄັ້ງສຸດທ້າຍ — ໃຊ້ detect topup ໃໝ່ (delta)
+        lnbitsBaseSats: {
+            type: Number,
+            default: null,
+        },
     },
     { timestamps: true }
 );

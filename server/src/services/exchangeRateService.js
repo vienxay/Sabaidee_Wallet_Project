@@ -38,25 +38,28 @@ exports.getExchangeRate = async () => {
     try {
         const rateDoc         = await Rate.findOne();
         const usdToLAKBase    = rateDoc?.usdToLAK        || 21000;
+        const spread          = rateDoc?.spreadPercent   || 0;
         const feePercent      = rateDoc?.laoQrFeePercent || 0;
 
-        // ລາຄາ base ໂດຍກົງ — ບໍ່ມີ spread markup
-        const usdToLAK = usdToLAKBase;
+        // ຄຳນວນລາຄາຂາຍ (ລວມ spread ຖ້າມີ, ຖ້າ spread=0 = base rate)
+        const usdToLAK = Math.round(usdToLAKBase * (1 + spread / 100));
 
         let btcToUSD = cache.btcToUSD || 0;
         try {
             btcToUSD = await fetchBTCtoUSD();
         } catch {
+            if (!btcToUSD) throw new Error('ບໍ່ສາມາດດຶງລາຄາ BTC ໄດ້ — ກະລຸນາລອງໃໝ່');
             console.warn('⚠️ BTC fetch failed — ໃຊ້ cache');
         }
 
+        if (!btcToUSD || btcToUSD <= 0) throw new Error('BTC price ຍັງບໍ່ພ້ອມ');
         const btcToLAK = Math.round(btcToUSD * usdToLAK);
 
         cache = {
             btcToUSD,
             usdToLAKBase,
             usdToLAK,
-            spreadPercent   : 0,
+            spreadPercent   : spread,
             laoQrFeePercent : feePercent,
             btcToLAK,
             fetchedAt       : new Date(),
@@ -84,5 +87,6 @@ exports.convertSatsToLAK = async (sats) => {
 
 exports.convertLAKToSats = async (lak) => {
     const rate = await exports.getExchangeRate();
+    if (!rate.btcToLAK || rate.btcToLAK <= 0) throw new Error('Exchange rate ຍັງບໍ່ພ້ອມ');
     return Math.round((lak / rate.btcToLAK) * 100_000_000);
 };
