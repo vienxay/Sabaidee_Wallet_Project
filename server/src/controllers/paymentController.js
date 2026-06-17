@@ -1,5 +1,6 @@
 const axios       = require('axios');
 const Wallet      = require('../models/Wallet');
+const { createNotification } = require('./notificationController');
 const Transaction = require('../models/Transaction');
 const Kyc         = require('../models/Kyc');
 const lnbits      = require('../services/lnbitsService');
@@ -267,6 +268,14 @@ exports.pay = async (req, res) => {
             },
         });
 
+        createNotification({
+            userId:        req.user._id,
+            title:         '⚡ ຈ່າຍເງິນສຳເລັດ',
+            body:          `ໂອນ ${amountSats.toLocaleString()} sats (${amountLAK.toLocaleString()} ກີບ)${description ? ` — ${description}` : ''}`,
+            type:          'pay',
+            transactionId: transaction._id,
+        });
+
         return res.status(200).json({
             success: true,
             message: 'ຈ່າຍເງິນສຳເລັດ',
@@ -428,6 +437,14 @@ exports.payLaoQR = async (req, res) => {
                 usdToLAK:  rate.usdToLAK,
                 fetchedAt: rate.fetchedAt,
             },
+        });
+
+        createNotification({
+            userId:        userId,
+            title:         '🏪 ຈ່າຍ LAO QR ສຳເລັດ',
+            body:          `ຈ່າຍ ${amountLAK.toLocaleString()} ກີບ ທີ່ ${merchantName || 'ຮ້ານຄ້າ'}`,
+            type:          'laoQR',
+            transactionId: tx._id,
         });
 
         return res.status(200).json({

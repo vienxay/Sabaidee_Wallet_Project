@@ -80,4 +80,8 @@ class AppConstants {
   static const adminUpdateRole = '/api/admin/users/role';
   static const adminRate       = '/api/admin/rate';
   static const adminUpdateRate = '/api/admin/rate/update';
+
+  // ─── Notification Endpoints ──────────────────────────────────────────────
+  static const String notifications        = '/api/notifications';
+  static const String notificationsReadAll = '/api/notifications/read-all';
 }

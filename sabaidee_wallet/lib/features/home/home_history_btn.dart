@@ -34,7 +34,7 @@ class HomeHistoryBtn extends StatelessWidget {
               ),
               SizedBox(width: 8),
               Text(
-                'ປະຫວັດທຸລະກຳ',
+                'ປະຫວັດທຸລະກຳທັງໝົດ',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

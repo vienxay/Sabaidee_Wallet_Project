@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../core/core.dart';
 import '../../models/app_models.dart';
 import '../../services/profile_service.dart';
+import '../../services/notification_service.dart';
 
 class HomeTopBar extends StatefulWidget {
   final GlobalKey<ScaffoldState> scaffoldKey;
@@ -24,15 +25,16 @@ class HomeTopBar extends StatefulWidget {
 class _HomeTopBarState extends State<HomeTopBar> {
   final _picker = ImagePicker();
   bool _uploading = false;
-  String? _profileImageUrl; // ✅ เก็บ URL จาก ProfileService
+  String? _profileImageUrl;
+  int _unreadCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadProfileImage(); // ✅ โหลดรูปจาก Profile collection
+    _loadProfileImage();
+    _loadUnreadCount();
   }
 
-  // ✅ ดึง profileImage จาก ProfileService (ไม่ใช่ UserModel)
   Future<void> _loadProfileImage() async {
     final profile = await ProfileService.getProfile();
     if (profile != null && mounted) {
@@ -40,6 +42,18 @@ class _HomeTopBarState extends State<HomeTopBar> {
         _profileImageUrl = profile.profileImage;
       });
     }
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final result = await NotificationService.instance.getNotifications();
+    if (mounted) {
+      setState(() => _unreadCount = result.unreadCount);
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.pushNamed(context, '/notifications');
+    _loadUnreadCount(); // refresh badge when returning
   }
 
   Future<void> _pickImage() async {
@@ -152,7 +166,7 @@ class _HomeTopBarState extends State<HomeTopBar> {
                 ),
               ),
               GestureDetector(
-                onTap: () {},
+                onTap: _openNotifications,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -161,18 +175,29 @@ class _HomeTopBarState extends State<HomeTopBar> {
                       color: AppColors.textDark,
                       size: 26,
                     ),
-                    Positioned(
-                      top: -2,
-                      right: -2,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
+                    if (_unreadCount > 0)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: const BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              _unreadCount > 99 ? '99+' : '$_unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

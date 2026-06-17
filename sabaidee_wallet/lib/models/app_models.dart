@@ -263,6 +263,37 @@ class LaoQRLimitModel {
   );
 }
 
+// ─── Notification Model ───────────────────────────────────────────────────────
+class NotificationModel {
+  final String id;
+  final String title;
+  final String body;
+  final String type; // 'topup' | 'pay' | 'laoQR' | 'withdraw' | 'kyc' | 'system'
+  final bool read;
+  final String? transactionId;
+  final DateTime createdAt;
+
+  const NotificationModel({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.type,
+    required this.read,
+    this.transactionId,
+    required this.createdAt,
+  });
+
+  factory NotificationModel.fromJson(Map<String, dynamic> j) => NotificationModel(
+    id:            j['_id'] as String? ?? '',
+    title:         j['title'] as String? ?? '',
+    body:          j['body'] as String? ?? '',
+    type:          j['type'] as String? ?? 'system',
+    read:          j['read'] as bool? ?? false,
+    transactionId: j['transactionId'] as String?,
+    createdAt:     DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now(),
+  );
+}
+
 // ─── Receiver Info Model ──────────────────────────────────────────────────────
 /// ຂໍ້ມູນ receiver ທີ່ຮັບເງິນ (ໃຊ້ໃນ internal transfer)
 class ReceiverInfoModel {

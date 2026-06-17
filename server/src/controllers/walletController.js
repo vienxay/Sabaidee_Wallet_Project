@@ -2,7 +2,8 @@ const Wallet      = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const lnbits      = require('../services/lnbitsService');
 const exchangeRate = require('../services/exchangeRateService');
-const Rate = require('../models/Rate'); 
+const Rate = require('../models/Rate');
+const { createNotification } = require('./notificationController');
 
 // ════════════════════════════════════════════════════════════════════════════
 // GET /api/wallet
@@ -226,6 +227,14 @@ exports.withdraw = async (req, res) => {
             },
         });
 
+        createNotification({
+            userId:        req.user._id,
+            title:         '💸 ຖອນເງິນສຳເລັດ',
+            body:          `ຖອນ ${decoded.amountSats.toLocaleString()} sats (${amountLAK.toLocaleString()} ກີບ)`,
+            type:          'withdraw',
+            transactionId: transaction._id,
+        });
+
         res.status(200).json({
             success: true,
             message: 'ຖອນເງິນສຳເລັດ',
@@ -261,9 +270,10 @@ exports.checkPaymentStatus = async (req, res) => {
         });
 
         if (result.paid) {
-            await Transaction.findOneAndUpdate(
+            const tx = await Transaction.findOneAndUpdate(
                 { paymentHash, user: req.user._id },
                 { status: 'success' },
+                { new: true },
             );
 
             // Topup ສຳເລັດ → sync LNBits ເຕັມ (LNBits ຄືແຫຼ່ງຂໍ້ມູນ)
@@ -272,6 +282,16 @@ exports.checkPaymentStatus = async (req, res) => {
             wallet.lnbitsBaseSats = balanceResult.balanceSats;
             wallet.balanceLAK     = await exchangeRate.convertSatsToLAK(balanceResult.balanceSats);
             await wallet.save();
+
+            if (tx) {
+                createNotification({
+                    userId:        req.user._id,
+                    title:         '✅ ເງິນເຂົ້າສຳເລັດ',
+                    body:          `ຮັບ ${tx.amountSats.toLocaleString()} sats (${tx.amountLAK.toLocaleString()} ກີບ)`,
+                    type:          'topup',
+                    transactionId: tx._id,
+                });
+            }
         }
 
         res.status(200).json({

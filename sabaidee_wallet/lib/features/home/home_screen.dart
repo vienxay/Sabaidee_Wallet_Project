@@ -161,15 +161,6 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   Widget _buildContent() {
-    final now = DateTime.now();
-    final successTx = _recentTx
-        .where(
-          (tx) =>
-              tx.status == 'success' &&
-              now.difference(tx.createdAt).inHours < 24,
-        )
-        .toList();
-
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
@@ -178,7 +169,6 @@ class _HomeScreenState extends State<HomeScreen> {
           HomeTopBar(scaffoldKey: _scaffoldKey, user: _user),
           const SizedBox(height: 12),
 
-          // ✅ KYC Promo Banner — ສະແດງຖ້າ user ຍັງບໍ່ KYC
           if (_kycStatus == KycStatus.none)
             _KycPromoBanner(onTap: _openKycSubmit),
 
@@ -195,15 +185,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 24),
 
-          if (successTx.isNotEmpty)
-            HomeRecentTx(tx: successTx.first)
+          if (_recentTx.isNotEmpty)
+            HomeRecentTx(txList: _recentTx)
           else
             _buildEmptyTx(),
 
           const SizedBox(height: 24),
           HomeHistoryBtn(onTap: _openHistory),
 
-          // ✅ KYC Rejected Banner — ຢູ່ດ້ານລຸ່ມປະຫວັດທຸລະກຳ
           if (_kycStatus == KycStatus.rejected) ...[
             const SizedBox(height: 16),
             _KycRejectedBanner(

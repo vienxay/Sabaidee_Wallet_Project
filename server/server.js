@@ -118,7 +118,8 @@ app.use('/api/transactions', require('./src/routes/transactionRoutes'))
 app.use('/api/kyc',          require('./src/routes/kycRoutes'))
 app.use('/api/withdrawal',   withdrawalRoutes)
 app.use('/api/profile',      require('./src/routes/profileRoutes'))
-app.use('/api/admin',        adminRoutes)
+app.use('/api/admin',         adminRoutes)
+app.use('/api/notifications', require('./src/routes/notificationRoutes'))
 
 app.get('/favicon.ico', (req, res) => res.status(204).end())
 

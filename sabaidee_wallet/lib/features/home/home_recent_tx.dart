@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/core.dart';
 import '../../models/app_models.dart';
+import '../payment/payment_detail_screen.dart';
 
 class HomeRecentTx extends StatelessWidget {
-  final TransactionModel tx;
-  const HomeRecentTx({super.key, required this.tx});
+  final List<TransactionModel> txList;
+  const HomeRecentTx({super.key, required this.txList});
 
   String _fmt(int n) => n.toString().replaceAllMapped(
     RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -13,18 +14,8 @@ class HomeRecentTx extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'ມັງກອນ',
-      'ກຸມພາ',
-      'ມີນາ',
-      'ເມສາ',
-      'ພຶດສະພາ',
-      'ມິຖຸນາ',
-      'ກໍລະກົດ',
-      'ສິງຫາ',
-      'ກັນຍາ',
-      'ຕຸລາ',
-      'ພະຈິກ',
-      'ທັນວາ',
+      'ມັງກອນ', 'ກຸມພາ', 'ມີນາ', 'ເມສາ', 'ພຶດສະພາ', 'ມິຖຸນາ',
+      'ກໍລະກົດ', 'ສິງຫາ', 'ກັນຍາ', 'ຕຸລາ', 'ພະຈິກ', 'ທັນວາ',
     ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
@@ -33,6 +24,45 @@ class HomeRecentTx extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          for (int i = 0; i < txList.length; i++) ...[
+            _TxCard(
+              tx: txList[i],
+              formatDate: _formatDate,
+              fmt: _fmt,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PaymentDetailScreen(tx: txList[i]),
+                ),
+              ),
+            ),
+            if (i < txList.length - 1) const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TxCard extends StatelessWidget {
+  final TransactionModel tx;
+  final String Function(DateTime) formatDate;
+  final String Function(int) fmt;
+  final VoidCallback onTap;
+
+  const _TxCard({
+    required this.tx,
+    required this.formatDate,
+    required this.fmt,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -92,7 +122,7 @@ class HomeRecentTx extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    _formatDate(tx.createdAt),
+                    formatDate(tx.createdAt),
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textGrey,
@@ -109,7 +139,7 @@ class HomeRecentTx extends StatelessWidget {
                 Text(
                   tx.isFailed
                       ? 'ລົ້ມເຫລວ'
-                      : '${tx.isReceive ? '+' : '-'}${_fmt(tx.amountSats)} sats',
+                      : '${tx.isReceive ? '+' : '-'}${fmt(tx.amountSats)} sats',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -129,7 +159,7 @@ class HomeRecentTx extends StatelessWidget {
                   )
                 else if (!tx.isFailed)
                   Text(
-                    '${_fmt(tx.amountLAK)} LAK',
+                    '${fmt(tx.amountLAK)} LAK',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textGrey,
