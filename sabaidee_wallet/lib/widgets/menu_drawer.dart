@@ -122,19 +122,6 @@ class _MenuDrawerState extends State<MenuDrawer> {
 
             // ─── Menu Items ──────────────────────────────────────────────────
             _MenuItem(
-              icon: Icons.language_outlined,
-              label: 'ພາສາ',
-              trailing: const Text(
-                'LA',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () {},
-            ),
-            _MenuItem(
               icon: Icons.payments_outlined,
               label: 'ຖອນເງິນ',
               onTap: () {
@@ -221,14 +208,12 @@ class _MenuDrawerState extends State<MenuDrawer> {
 class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Widget? trailing;
   final VoidCallback onTap;
 
   const _MenuItem({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.trailing,
   });
 
   @override
@@ -251,9 +236,7 @@ class _MenuItem extends StatelessWidget {
           color: AppColors.textDark,
         ),
       ),
-      trailing:
-          trailing ??
-          const Icon(Icons.chevron_right, color: AppColors.textGrey, size: 18),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.textGrey, size: 18),
       onTap: onTap,
     );
   }
