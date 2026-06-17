@@ -9,7 +9,7 @@ const {
 } = require('../controllers/authController');
 
 const {
-    forgotPassword, verifyOTP, resetPassword,
+    forgotPassword, verifyOTP, resetPassword, changePassword,
 } = require('../controllers/passwordController');
 
 const router = express.Router();
@@ -21,9 +21,10 @@ router.get('/me',         protect, getMe);
 router.post('/logout',    protect, logout);
 
 // ─── Password Reset ───────────────────────────────────────────────────────────
-router.post('/forgot-password', forgotPassword);
-router.post('/verify-otp',      verifyOTP);
-router.post('/reset-password',  resetPassword);
+router.post('/forgot-password',   forgotPassword);
+router.post('/verify-otp',        verifyOTP);
+router.post('/reset-password',    resetPassword);
+router.post('/change-password',   protect, changePassword);
 
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
 router.get('/google',

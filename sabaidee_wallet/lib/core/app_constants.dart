@@ -19,6 +19,7 @@ class AppConstants {
   static const String authForgotPass    = '/api/auth/forgot-password';
   static const String authVerifyOtp     = '/api/auth/verify-otp';
   static const String authResetPass     = '/api/auth/reset-password';
+  static const String authChangePass    = '/api/auth/change-password';
   static const String authGoogle        = '/api/auth/google';
   static const String baseUrl           = apiBaseUrl;
   static const String authProfileImage  = '/api/auth/profile/image';

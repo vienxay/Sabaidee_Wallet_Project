@@ -160,7 +160,7 @@ class _MenuDrawerState extends State<MenuDrawer> {
               label: 'ການຕັ້ງຄ່າ',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.pushNamed(context, '/profile');
+                Navigator.pushNamed(context, '/settings');
               },
             ),
 

@@ -25,6 +25,7 @@ import 'features/auth/welcome_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/kyc/kyc_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/settings/settings_screen.dart';
 import 'services/auth_service.dart';
 import 'services/kyc_gate_service.dart';
 import 'services/storage_service.dart';
@@ -208,6 +209,7 @@ class _SabaideeWalletState extends State<SabaideeWallet> {
         '/reset-password':   (_) => const ResetPasswordScreen(),
         '/home':             (_) => const HomeScreen(),
         '/profile':          (_) => const ProfileScreen(),
+        '/settings':         (_) => const SettingsScreen(),
         '/kyc':              (_) => const KycScreen(),
         '/admin':            (_) => const AdminScreen(),
         GoogleCallbackScreen.routeName: (_) => const GoogleCallbackScreen(),
