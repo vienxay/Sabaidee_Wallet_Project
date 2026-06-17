@@ -62,9 +62,9 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ── Indexes (ຄືເດີມ) ──────────────────────────────────────────────────────────
+// ── Indexes ──────────────────────────────────────────────────────────────────
 transactionSchema.index({ user: 1, createdAt: -1 });
-transactionSchema.index({ status: 1, type: 1 });
+transactionSchema.index({ user: 1, type: 1, status: 1, createdAt: -1 });
 
 // ── ✅ Static method: ດຶງຍອດ laoQR ມື້ນີ້ (paymentController ເອີ້ນໃຊ້) ────────
 transactionSchema.statics.getDailyLaoQRSpent = async function (userId) {

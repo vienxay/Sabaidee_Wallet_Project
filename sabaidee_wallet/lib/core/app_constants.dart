@@ -5,10 +5,10 @@ class AppConstants {
 
   // ─── Base URL ──────────────────────────────────────────────────────────────
   // ດຶງຈາກ environment variable API_BASE_URL ຕອນ build
-  // ຖ້າບໍ່ຕັ້ງ → ໃຊ້ ngrok URL ສຳລັບ development
+  // flutter run --dart-define=API_BASE_URL=https://your-server.com
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://unpluralized-membranophonic-saniya.ngrok-free.dev',
+    defaultValue: 'http://10.0.2.2:3000',
   );
 
   // ─── Auth Endpoints ────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ const { sendOTPEmail } = require('../services/emailService');
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 const generateOTP = () =>
-    Math.floor(100000 + Math.random() * 900000).toString();
+    crypto.randomInt(100000, 999999).toString();
 
 // ─── POST /api/auth/forgot-password ──────────────────────────────────────────
 

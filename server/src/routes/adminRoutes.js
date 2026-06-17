@@ -53,10 +53,19 @@ router.get('/users', protect, adminOnly, async (req, res) => {
     }
 });
 
-// ── POST /api/admin/setup ────────────────────────────────────────────────
+// ── POST /api/admin/setup (ສ້າງ admin ຄັ້ງທຳອິດເທົ່ານັ້ນ) ──────────────
 router.post('/setup', async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, setupSecret } = req.body;
+
+        if (process.env.ADMIN_SETUP_SECRET && setupSecret !== process.env.ADMIN_SETUP_SECRET) {
+            return res.status(403).json({ success: false, message: 'ບໍ່ໄດ້ຮັບອະນຸຍາດ' });
+        }
+
+        if (!name || !email || !password || password.length < 6) {
+            return res.status(400).json({ success: false, message: 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ (ລະຫັດຢ່າງໜ້ອຍ 6 ຕົວ)' });
+        }
+
         const existingAdmin = await User.findOne({ role: 'admin' });
         if (existingAdmin)
             return res.status(403).json({ success: false, message: 'ມີ Admin ຢູ່ແລ້ວ — ກະລຸນາ Login' });
@@ -66,7 +75,8 @@ router.post('/setup', async (req, res) => {
 
         return res.status(201).json({ success: true, message: 'ສ້າງ Admin ສຳເລັດ' });
     } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
+        console.error('Admin Setup Error:', error);
+        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນລະບົບ' });
     }
 });
 

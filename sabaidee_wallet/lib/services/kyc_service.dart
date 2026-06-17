@@ -15,7 +15,7 @@ class KycService {
     try {
       final res = await ApiClient.instance.get(AppConstants.kycStatus);
 
-      debugPrint('[KycService] GET ${res.statusCode}: ${res.data}');
+      debugPrint('[KycService] GET ${res.statusCode}');
 
       if (res.success && res.data != null) {
         final body = res.data as Map<String, dynamic>;
@@ -62,7 +62,7 @@ class KycService {
       final uri = Uri.parse(
         '${AppConstants.apiBaseUrl}${AppConstants.kycSubmit}',
       );
-      debugPrint('[KycService] POST → $uri');
+      debugPrint('[KycService] POST submitKyc');
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
@@ -83,7 +83,7 @@ class KycService {
       final res = await http.Response.fromStream(streamed);
 
       debugPrint('[KycService] status: ${res.statusCode}');
-      debugPrint('[KycService] body:   ${res.body}');
+      debugPrint('[KycService] status: done');
 
       final body = jsonDecode(res.body) as Map<String, dynamic>;
 
