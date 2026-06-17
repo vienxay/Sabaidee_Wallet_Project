@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'transfer_confirm_screen.dart';
+import '../../services/payment_service.dart';
 
 class TransferScreen extends StatefulWidget {
   final String senderName;
@@ -34,6 +35,8 @@ class _TransferScreenState extends State<TransferScreen>
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
 
+  double _feePercent = 0;
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +50,25 @@ class _TransferScreenState extends State<TransferScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
     _animCtrl.forward();
+    _loadFeePercent();
   }
+
+  Future<void> _loadFeePercent() async {
+    final result = await PaymentService.instance.getLaoQRLimitStatus();
+    if (!mounted) return;
+    if (result.success && result.data != null) {
+      setState(() => _feePercent = result.data!.laoQrFeePercent);
+    }
+  }
+
+  int get _inputAmount {
+    final raw = _amountCtrl.text.trim().replaceAll(',', '');
+    return int.tryParse(raw) ?? 0;
+  }
+
+  int get _feeLAK => (_feePercent > 0 && _inputAmount > 0)
+      ? (_inputAmount * _feePercent / 100).ceil()
+      : 0;
 
   @override
   void dispose() {
@@ -74,6 +95,7 @@ class _TransferScreenState extends State<TransferScreen>
           receiverAccount: widget.receiverAccount,
           receiverAvatarUrl: widget.receiverAvatarUrl,
           amountLAK: amount,
+          feeLAK: _feeLAK,
           memo: _memoCtrl.text.trim(),
         ),
       ),
@@ -318,7 +340,7 @@ class _TransferScreenState extends State<TransferScreen>
       if (n == null || n < 1000) return 'ຕ້ອງຢ່າງໜ້ອຍ 1,000 ກີບ';
       return null;
     },
-    onChanged: (_) => setState(() {}),
+    onChanged: (_) => setState(() {}), // ອັບເດດ _feeLAK ທຸກຄັ້ງທີ່ amount ປ່ຽນ
   );
 
   Widget _buildMemoField() => TextFormField(
