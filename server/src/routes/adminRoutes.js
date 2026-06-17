@@ -264,8 +264,6 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
 
         const rounded      = Math.round(usdToLAK);
         const spread       = parseFloat(spreadPercent) || 0;
-        const laoQrFee     = parseFloat(laoQrFeePercent) || 0;
-        // ✅ ຄຳນວນລາຄາຂາຍລວມ spread
         const usdToLAKSell = Math.round(rounded * (1 + spread / 100));
 
         // ✅ ດຶງ BTC/USD
@@ -295,21 +293,27 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
         // ✅ btcToLAK ໃຊ້ລາຄາຂາຍ (ລວມ spread)
         const btcToLAK = Math.round(btcToUSD * usdToLAKSell);
 
+        const updateFields = {
+            usdToLAK     : rounded,
+            spreadPercent: spread,
+            btcToUSD,
+            btcToLAK,
+        };
+        // ອັບເດດ laoQrFeePercent ສະເພາະເວລາ admin ສົ່ງຄ່າມາ (ບໍ່ reset ເປັນ 0 ໂດຍບັງເອີນ)
+        if (laoQrFeePercent !== undefined) {
+            updateFields.laoQrFeePercent = parseFloat(laoQrFeePercent) || 0;
+        }
+
         const rate = await Rate.findOneAndUpdate(
             {},
-            {
-                usdToLAK        : rounded,
-                spreadPercent   : spread,
-                laoQrFeePercent : laoQrFee,
-                btcToUSD,
-                btcToLAK,
-            },
+            updateFields,
             { returnDocument: 'after', upsert: true }
         );
 
         exchangeRate.clearCache();
 
-        console.log(`✅ Rate: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD} | LAO QR fee=${laoQrFee}%`);
+        const currentFee = rate?.laoQrFeePercent ?? 0;
+        console.log(`✅ Rate: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD} | LAO QR fee=${currentFee}%`);
         return res.json({ success: true, message: 'ອັບເດດ Rate ສຳເລັດ', rate });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
