@@ -253,6 +253,8 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
     try {
         const { usdToLAK, spreadPercent, laoQrFeePercent } = req.body;
 
+        console.log('📥 Rate update received:', { usdToLAK, spreadPercent, laoQrFeePercent });
+
         if (!usdToLAK || usdToLAK <= 0)
             return res.status(400).json({ success: false, message: 'ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ' });
 
@@ -293,7 +295,7 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
         // ✅ btcToLAK ໃຊ້ລາຄາຂາຍ (ລວມ spread)
         const btcToLAK = Math.round(btcToUSD * usdToLAKSell);
 
-        const updateFields = {
+        const setFields = {
             usdToLAK     : rounded,
             spreadPercent: spread,
             btcToUSD,
@@ -301,19 +303,21 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
         };
         // ອັບເດດ laoQrFeePercent ສະເພາະເວລາ admin ສົ່ງຄ່າມາ (ບໍ່ reset ເປັນ 0 ໂດຍບັງເອີນ)
         if (laoQrFeePercent !== undefined) {
-            updateFields.laoQrFeePercent = parseFloat(laoQrFeePercent) || 0;
+            setFields.laoQrFeePercent = Number(laoQrFeePercent);
         }
+
+        console.log('💾 Saving to DB:', setFields);
 
         const rate = await Rate.findOneAndUpdate(
             {},
-            updateFields,
-            { returnDocument: 'after', upsert: true }
+            { $set: setFields },
+            { returnDocument: 'after', upsert: true, new: true }
         );
 
         exchangeRate.clearCache();
 
         const currentFee = rate?.laoQrFeePercent ?? 0;
-        console.log(`✅ Rate: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD} | LAO QR fee=${currentFee}%`);
+        console.log(`✅ Rate saved: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD} | LAO QR fee=${currentFee}%`);
         return res.json({ success: true, message: 'ອັບເດດ Rate ສຳເລັດ', rate });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
