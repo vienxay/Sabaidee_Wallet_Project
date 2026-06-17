@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'transfer_confirm_screen.dart';
-import 'payment_error_dialog.dart'; // ✅ ເພີ່ມ
-import '../kyc/kyc_screen.dart'; // ✅ ເພີ່ມ
-import '../../services/payment_service.dart';
 
 class TransferScreen extends StatefulWidget {
   final String senderName;
@@ -37,10 +34,6 @@ class _TransferScreenState extends State<TransferScreen>
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
 
-  int _todaySpent = 0;
-  int _dailyLimit = 2000000;
-  bool _limitLoaded = false;
-
   @override
   void initState() {
     super.initState();
@@ -54,21 +47,6 @@ class _TransferScreenState extends State<TransferScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
     _animCtrl.forward();
-    _loadLimit();
-  }
-
-  Future<void> _loadLimit() async {
-    final result = await PaymentService.instance.getLaoQRLimitStatus();
-    if (!mounted) return;
-    if (result.success && result.data != null) {
-      setState(() {
-        _todaySpent = result.data!.todaySpent;
-        _dailyLimit = result.data!.dailyLimit;
-        _limitLoaded = true;
-      });
-    } else {
-      setState(() => _limitLoaded = true);
-    }
   }
 
   @override
@@ -79,38 +57,12 @@ class _TransferScreenState extends State<TransferScreen>
     super.dispose();
   }
 
-  // ─── Format ───────────────────────────────────────────────────────────────
-  String _fmt(int n) => n.toString().replaceAllMapped(
-    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-    (m) => '${m[1]},',
-  );
-
   // ─── Next ─────────────────────────────────────────────────────────────────
   void _onNext() {
     if (!_formKey.currentState!.validate()) return;
 
     final amount = int.parse(_amountCtrl.text.replaceAll(',', ''));
-    final remaining = _dailyLimit - _todaySpent;
 
-    // ✅ ເກີນວົງເງິນ → ສະແດງ dialog ໄປ KYC
-    if (amount > remaining) {
-      PaymentErrorDialog.show(
-        context,
-        errorInfo: PaymentErrorInfo(
-          type: PaymentErrorType.limitExceeded,
-          message:
-              'ເກີນວົງເງິນຕໍ່ມື້ (${_fmt(_dailyLimit)} ກີບ).\nກະລຸນາຢືນຢັນຕົວຕົນ (KYC) ເພື່ອຍກລະດັບວົງເງິນ',
-          requireKYC: true,
-        ),
-        onGoToKYC: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const KycScreen()),
-        ),
-      );
-      return;
-    }
-
-    // ✅ ໄປ confirm + reload ວົງເງິນເມື່ອກັບ
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -125,9 +77,7 @@ class _TransferScreenState extends State<TransferScreen>
           memo: _memoCtrl.text.trim(),
         ),
       ),
-    ).then((_) {
-      if (mounted) _loadLimit(); // ✅ reload ວົງເງິນຕາມຈິງ
-    });
+    );
   }
 
   @override
@@ -149,10 +99,6 @@ class _TransferScreenState extends State<TransferScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_limitLoaded) ...[
-                          _buildLimitBar(),
-                          const SizedBox(height: 16),
-                        ],
                         _buildLabel('ຈຳນວນເງິນ (LAK)', required: true),
                         const SizedBox(height: 20),
                         _buildAmountField(),
@@ -253,59 +199,6 @@ class _TransferScreenState extends State<TransferScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLimitBar() {
-    final remaining = _dailyLimit - _todaySpent;
-    final progress = (_todaySpent / _dailyLimit).clamp(0.0, 1.0);
-    final isNear = progress >= 0.8;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'ວົງເງິນຄົງເຫຼືອວັນນີ້',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-            RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: _fmt(remaining),
-                    style: TextStyle(
-                      color: isNear
-                          ? const Color(0xFFEF4444)
-                          : const Color(0xFFE8820C),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' / ${_fmt(_dailyLimit)} ກີບ',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 6,
-            backgroundColor: Colors.grey.shade200,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isNear ? const Color(0xFFEF4444) : const Color(0xFFE8820C),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

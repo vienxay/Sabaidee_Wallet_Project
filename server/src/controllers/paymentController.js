@@ -400,6 +400,7 @@ exports.payLaoQR = async (req, res) => {
             amountSats,
             amountLAK,
             feeSats,
+            feeLAK,
             merchantName: merchantName || 'ຮ້ານຄ້າ',
             bank:         bank || '',
             qrRaw:        qrRaw || '',

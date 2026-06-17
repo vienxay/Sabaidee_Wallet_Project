@@ -125,8 +125,11 @@ class TransactionModel {
   final int amountSats;
   final int amountLAK;
   final int feeSats;
+  final int feeLAK;
   final String paymentHash;
   final String memo;
+  final String merchantName;
+  final String bank;
   final bool kycRequired;
   final DateTime createdAt;
 
@@ -137,23 +140,29 @@ class TransactionModel {
     required this.amountSats,
     required this.amountLAK,
     this.feeSats = 0,
+    this.feeLAK = 0,
     this.paymentHash = '',
     this.memo = '',
+    this.merchantName = '',
+    this.bank = '',
     this.kycRequired = false,
     required this.createdAt,
   });
 
   factory TransactionModel.fromJson(Map<String, dynamic> j) => TransactionModel(
-    id:          j['_id']         as String? ?? '',
-    type:        j['type']        as String? ?? '',
-    status:      j['status']      as String? ?? '',
-    amountSats:  (j['amountSats'] as num?)?.toInt() ?? 0,
-    amountLAK:   (j['amountLAK']  as num?)?.toInt() ?? 0,
-    feeSats:     (j['feeSats']    as num?)?.toInt() ?? 0,
-    paymentHash: j['paymentHash'] as String? ?? '',
-    memo:        j['memo']        as String? ?? '',
-    kycRequired: j['kycRequired'] as bool? ?? false,
-    createdAt:   DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now(),
+    id:           j['_id']          as String? ?? '',
+    type:         j['type']         as String? ?? '',
+    status:       j['status']       as String? ?? '',
+    amountSats:   (j['amountSats']  as num?)?.toInt() ?? 0,
+    amountLAK:    (j['amountLAK']   as num?)?.toInt() ?? 0,
+    feeSats:      (j['feeSats']     as num?)?.toInt() ?? 0,
+    feeLAK:       (j['feeLAK']      as num?)?.toInt() ?? 0,
+    paymentHash:  j['paymentHash']  as String? ?? '',
+    memo:         j['memo']         as String? ?? '',
+    merchantName: j['merchantName'] as String? ?? '',
+    bank:         j['bank']         as String? ?? '',
+    kycRequired:  j['kycRequired']  as bool? ?? false,
+    createdAt:    DateTime.tryParse(j['createdAt'] ?? '') ?? DateTime.now(),
   );
 
   bool get isReceive => type == 'topup' || type == 'receive';

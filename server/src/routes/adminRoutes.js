@@ -404,10 +404,11 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
             day:   { $dayOfMonth: '$createdAt' },
             type:  '$type',
         },
-        totalSats: { $sum: '$amountSats' },
-        totalLAK:  { $sum: '$amountLAK'  },
-        totalFeeSats: { $sum: '$feeSats' },  // ✅ ເພີ່ມ fee
-        count:     { $sum: 1 },
+        totalSats:    { $sum: '$amountSats' },
+        totalLAK:     { $sum: '$amountLAK'  },
+        totalFeeSats: { $sum: '$feeSats'    },
+        totalFeeLAK:  { $sum: '$feeLAK'     },
+        count:        { $sum: 1 },
         }
     },
     { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } }
@@ -430,7 +431,8 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
         },
         totalSats:    { $sum: '$amountSats' },
         totalLAK:     { $sum: '$amountLAK'  },
-        totalFeeSats: { $sum: '$feeSats'    },  // ✅ ເພີ່ມ fee
+        totalFeeSats: { $sum: '$feeSats'    },
+        totalFeeLAK:  { $sum: '$feeLAK'     },
         count:        { $sum: 1 },
         }
     },
@@ -438,22 +440,24 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
     ])
 
     // ── ຄຳນວນກຳໄລ ──────────────────────────────────────────────────────
-    // ກຳໄລ = LAK ທີ່ user ຈ່າຍ × spread% ທີ່ admin ຕັ້ງ
-    // ຖ້າ spread = 0 → ບໍ່ມີກຳໄລ (ຕ້ອງ set spread ໃນ admin dashboard)
-    const calcProfit = (totalLAK, type) => {
-      if (type === 'withdraw' || type === 'failed') return 0
+    // laoQR: ກຳໄລ = feeLAK ທີ່ເກັບໄວ້ໃນ transaction ໂດຍກົງ
+    // topup/pay: ກຳໄລ = LAK × spread% / (100 + spread%)
+    const calcProfit = (row) => {
+      const type = row._id.type
+      if (type === 'withdraw') return 0
+      if (type === 'laoQR') return row.totalFeeLAK || 0
       if (spreadPercent <= 0) return 0
-      return Math.round(totalLAK * (spreadPercent / (100 + spreadPercent)))
+      return Math.round(row.totalLAK * (spreadPercent / (100 + spreadPercent)))
     }
 
     const profitDayResult = profitByDay.map(row => ({
       ...row,
-      profitLAK: calcProfit(row.totalLAK, row._id.type),
+      profitLAK: calcProfit(row),
     }))
 
     const profitMonthResult = profitByMonth.map(row => ({
       ...row,
-      profitLAK: calcProfit(row.totalLAK, row._id.type),
+      profitLAK: calcProfit(row),
     }))
 
     // ── ກຳໄລລວມ ─────────────────────────────────────────────────────────

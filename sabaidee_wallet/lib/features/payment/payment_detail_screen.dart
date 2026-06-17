@@ -6,6 +6,21 @@ class PaymentDetailScreen extends StatelessWidget {
   final TransactionModel tx;
   const PaymentDetailScreen({super.key, required this.tx});
 
+  String _typeLabel() {
+    switch (tx.type) {
+      case 'laoQR':   return 'LAO QR PAYMENT';
+      case 'topup':   return 'TOP UP';
+      case 'withdraw': return 'WITHDRAW';
+      case 'receive': return 'RECEIVE';
+      default:        return 'LIGHTNING NETWORK PAYMENT';
+    }
+  }
+
+  String _fmt(int n) => n.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
+
   String _formatDate(DateTime dt) {
     const months = [
       'ມັງກອນ',
@@ -97,8 +112,17 @@ class PaymentDetailScreen extends StatelessWidget {
               ),
               const Divider(height: 24, color: AppColors.divider),
 
-              _Row(label: 'Type', value: 'LIGHTNING NETWORK PAYMENT'),
+              _Row(label: 'Type', value: _typeLabel()),
               const SizedBox(height: 12),
+
+              if (tx.type == 'laoQR' && tx.merchantName.isNotEmpty) ...[
+                _Row(label: 'ຮ້ານຄ້າ', value: tx.merchantName),
+                if (tx.bank.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _Row(label: 'ທະນາຄານ', value: tx.bank),
+                ],
+                const SizedBox(height: 12),
+              ],
 
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -133,7 +157,15 @@ class PaymentDetailScreen extends StatelessWidget {
               ),
               const Divider(height: 24, color: AppColors.divider),
 
-              _Row(label: 'Total Fees (sats)', value: '${tx.feeSats}'),
+              if (tx.type == 'laoQR')
+                _Row(
+                  label: 'ຄ່າທຳນຽມ',
+                  value: tx.feeLAK > 0
+                      ? '${_fmt(tx.feeLAK)} ກີບ (${tx.feeSats} sats)'
+                      : 'ບໍ່ມີຄ່າທຳນຽມ',
+                )
+              else
+                _Row(label: 'Total Fees (sats)', value: '${tx.feeSats}'),
               const SizedBox(height: 12),
 
               if (tx.memo.isNotEmpty) ...[
