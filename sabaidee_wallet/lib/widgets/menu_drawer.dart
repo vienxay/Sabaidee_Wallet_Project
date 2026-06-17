@@ -122,11 +122,6 @@ class _MenuDrawerState extends State<MenuDrawer> {
 
             // ─── Menu Items ──────────────────────────────────────────────────
             _MenuItem(
-              icon: Icons.location_on_outlined,
-              label: 'ຄົ້ນຫາຮ້ານຄ້າ',
-              onTap: () {},
-            ),
-            _MenuItem(
               icon: Icons.language_outlined,
               label: 'ພາສາ',
               trailing: const Text(
@@ -163,7 +158,10 @@ class _MenuDrawerState extends State<MenuDrawer> {
             _MenuItem(
               icon: Icons.settings_outlined,
               label: 'ການຕັ້ງຄ່າ',
-              onTap: () {},
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/profile');
+              },
             ),
 
             const Spacer(),
