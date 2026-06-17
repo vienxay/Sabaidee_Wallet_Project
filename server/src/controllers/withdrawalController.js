@@ -207,15 +207,25 @@ exports.sendWithdrawal = async (req, res) => {
             });
         }
 
-        // ── ຄຳນວນ sats ───────────────────────────────────────────────────────
-        const amountSats = await exchangeRate.convertLAKToSats(amountLAK);
+        // ── ຄຳນວນ sats + ຄ່າທຳນຽມ % ──────────────────────────────────────
+        const amountSats  = await exchangeRate.convertLAKToSats(amountLAK);
 
         if (amountSats < 1) {
             return res.status(400).json({ success: false, message: 'ຈຳນວນໜ້ອຍເກີນໄປ (ຕ່ຳສຸດ 1 sat)' });
         }
 
-        if (wallet.balanceSats < amountSats) {
-            return res.status(400).json({ success: false, message: 'ຍອດ sats ບໍ່ພໍ' });
+        // ── Atomic: ກວດ + ຫັກ balance ພ້ອມກັນ (ກັນ race condition) ──
+        const atomicWallet = await Wallet.findOneAndUpdate(
+            { user: userId, balanceSats: { $gte: amountSats } },
+            { $inc: { balanceSats: -amountSats } },
+            { new: true },
+        ).select('+adminKey');
+
+        if (!atomicWallet) {
+            return res.status(400).json({
+                success: false,
+                message: `ຍອດ sats ບໍ່ພໍ (ຕ້ອງການ ${amountSats.toLocaleString()} sats, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
+            });
         }
 
         // ── ໄດ້ BOLT11 invoice ───────────────────────────────────────────────
@@ -229,29 +239,40 @@ exports.sendWithdrawal = async (req, res) => {
         if (destType === 'address') {
             paymentRequest = await fetchInvoiceFromAddress(destination.trim(), amountSats);
         } else if (destType === 'lnurl') {
-            paymentRequest = await fetchInvoiceFromLNURL(destination.trim(), amountSats); // ✅ ເພີ່ມ
+            paymentRequest = await fetchInvoiceFromLNURL(destination.trim(), amountSats);
         } else {
             paymentRequest = destination.trim();
         }
 
         // ── ສົ່ງຜ່ານ LNBits ──────────────────────────────────────────────────
-        const payResult = await lnbits.payInvoice({
-            adminKey: wallet.adminKey,
-            paymentRequest,
-        });
+        let payResult;
+        try {
+            payResult = await lnbits.payInvoice({
+                adminKey: atomicWallet.adminKey,
+                paymentRequest,
+            });
+        } catch (lnbitsErr) {
+            // LNBits ລົ້ມເຫຼວ → ຄືນເງິນທີ່ຫັກໄວ້
+            await Wallet.updateOne(
+                { user: userId },
+                { $inc: { balanceSats: amountSats } },
+            );
+            throw lnbitsErr;
+        }
 
-        // ── Sync balance ຈາກ LNBits ຕົວຈິງ ────────────────────────────────
-        // ໃຊ້ balance ຕົວຈິງ ເພາະ routing fee ຈາກ Lightning Network
-        // ຖືກຫັກໂດຍ LNBits ອັດຕະໂນມັດ (user ເຫັນ balance ຖືກຕ້ອງ)
-        const newBalance    = await lnbits.getBalance(wallet.invoiceKey);
-        wallet.balanceSats  = Math.max(0, newBalance.balanceSats);
-        wallet.balanceLAK   = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
-        await wallet.save();
+        // ── Sync balance: ຫັກ routing fee ເພີ່ມ ──────────────────────────────
+        const lnbitsAfter  = await lnbits.getBalance(atomicWallet.invoiceKey);
+        const routingFee   = Math.max(0, (atomicWallet.balanceSats + amountSats) - lnbitsAfter.balanceSats - amountSats);
+        const finalSats    = Math.max(0, atomicWallet.balanceSats - routingFee);
+        const finalLAK     = await exchangeRate.convertSatsToLAK(finalSats);
+        await Wallet.updateOne({ user: userId }, {
+            $set: { balanceSats: finalSats, balanceLAK: finalLAK, lnbitsBaseSats: lnbitsAfter.balanceSats },
+        });
 
         // ── Save Transaction ─────────────────────────────────────────────────
         const transaction = await Transaction.create({
             user:            userId,
-            wallet:          wallet._id,
+            wallet:          atomicWallet._id,
             type:            'withdraw',
             status:          'success',
             amountSats,
@@ -281,7 +302,7 @@ exports.sendWithdrawal = async (req, res) => {
             amountSats,
             amountLAK,
             feeSats:       0,
-            balanceSats:   wallet.balanceSats,
+            balanceSats:   finalSats,
             createdAt:     transaction.createdAt,
             rate: {
                 btcToLAK: rate.btcToLAK,
@@ -304,8 +325,8 @@ exports.sendWithdrawal = async (req, res) => {
                 memo:        'Failed withdrawal',
                 errorMsg:    error.message,
             });
-        } catch (_) {}
+        } catch (_) { /* ignore */ }
 
-        return res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, message: 'ເກີດຂໍ້ຜິດພາດໃນການຖອນເງິນ' });
     }
 };
