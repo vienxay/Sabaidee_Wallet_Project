@@ -223,24 +223,20 @@ router.post('/kyc/review', protect, staffOrAdmin, async (req, res) => {
 router.get('/rate', protect, staffOrAdmin, async (req, res) => {
     try {
         const rateDoc      = await Rate.findOne();
-        const spread       = rateDoc?.spreadPercent || 0;
-        const usdToLAKBase = rateDoc?.usdToLAK      || 0;
-        const btcToUSD     = rateDoc?.btcToUSD       || 0;
-
-        // ✅ ຄຳນວນລາຄາຂາຍລວມ spread
-        const usdToLAK = Math.round(usdToLAKBase * (1 + spread / 100));
-        const btcToLAK = Math.round(btcToUSD * usdToLAK);
+        const usdToLAKBase = rateDoc?.usdToLAK || 0;
+        const btcToUSD     = rateDoc?.btcToUSD  || 0;
+        const btcToLAK     = Math.round(btcToUSD * usdToLAKBase);
 
         return res.json({
             success: true,
             rate: {
-                usdToLAK,
+                usdToLAK        : usdToLAKBase,
                 usdToLAKBase,
-                spreadPercent    : spread,
-                laoQrFeePercent  : rateDoc?.laoQrFeePercent || 0,
+                spreadPercent   : 0,
+                laoQrFeePercent : rateDoc?.laoQrFeePercent || 0,
                 btcToUSD,
                 btcToLAK,
-                updatedAt        : rateDoc?.updatedAt,
+                updatedAt       : rateDoc?.updatedAt,
             },
         });
     } catch (error) {
@@ -251,24 +247,17 @@ router.get('/rate', protect, staffOrAdmin, async (req, res) => {
 // ── POST /api/admin/rate/update ──────────────────────────────────────────
 router.post('/rate/update', protect, adminOnly, async (req, res) => {
     try {
-        const { usdToLAK, spreadPercent, laoQrFeePercent } = req.body;
-
-        console.log('📥 Rate update received:', { usdToLAK, spreadPercent, laoQrFeePercent });
+        const { usdToLAK, laoQrFeePercent } = req.body;
 
         if (!usdToLAK || usdToLAK <= 0)
             return res.status(400).json({ success: false, message: 'ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ' });
 
-        if (spreadPercent === undefined || spreadPercent < 0)
-            return res.status(400).json({ success: false, message: 'ໃສ່ Spread % ທີ່ຖືກຕ້ອງ (0 ຂຶ້ນໄປ)' });
-
         if (laoQrFeePercent !== undefined && laoQrFeePercent < 0)
-            return res.status(400).json({ success: false, message: 'ຄ່າທຳນຽມ LAO QR ຕ້ອງ >= 0' });
+            return res.status(400).json({ success: false, message: 'ຄ່າທຳນຽມຕ້ອງ >= 0' });
 
-        const rounded      = Math.round(usdToLAK);
-        const spread       = parseFloat(spreadPercent) || 0;
-        const usdToLAKSell = Math.round(rounded * (1 + spread / 100));
+        const rounded = Math.round(usdToLAK);
 
-        // ✅ ດຶງ BTC/USD
+        // ດຶງ BTC/USD
         let btcToUSD = 0;
         try {
             const { data } = await axios.get(
@@ -292,21 +281,17 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
             }
         }
 
-        // ✅ btcToLAK ໃຊ້ລາຄາຂາຍ (ລວມ spread)
-        const btcToLAK = Math.round(btcToUSD * usdToLAKSell);
+        const btcToLAK = Math.round(btcToUSD * rounded);
 
         const setFields = {
             usdToLAK     : rounded,
-            spreadPercent: spread,
+            spreadPercent: 0,
             btcToUSD,
             btcToLAK,
         };
-        // ອັບເດດ laoQrFeePercent ສະເພາະເວລາ admin ສົ່ງຄ່າມາ (ບໍ່ reset ເປັນ 0 ໂດຍບັງເອີນ)
         if (laoQrFeePercent !== undefined) {
             setFields.laoQrFeePercent = Number(laoQrFeePercent);
         }
-
-        console.log('💾 Saving to DB:', setFields);
 
         const rate = await Rate.findOneAndUpdate(
             {},
@@ -317,7 +302,7 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
         exchangeRate.clearCache();
 
         const currentFee = rate?.laoQrFeePercent ?? 0;
-        console.log(`✅ Rate saved: base=${rounded} | spread=${spread}% | ຂາຍ=${usdToLAKSell} | BTC=$${btcToUSD} | LAO QR fee=${currentFee}%`);
+        console.log(`✅ Rate saved: base=${rounded} | BTC=$${btcToUSD} | btcToLAK=${btcToLAK} | fee=${currentFee}%`);
         return res.json({ success: true, message: 'ອັບເດດ Rate ສຳເລັດ', rate });
     } catch (error) {
         return res.status(500).json({ success: false, message: error.message });
@@ -392,8 +377,7 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
     toDate.setHours(23, 59, 59, 999)
 
     const rate = await Rate.findOne()
-    const spreadPercent = rate?.spreadPercent || 0
-    const usdToLAKBase  = rate?.usdToLAK     || 0
+    const usdToLAKBase  = rate?.usdToLAK || 0
 
     // ── ກຳໄລຕໍ່ວັນ — ເພີ່ມ feeSats ──────────────────────────────────────────
     const profitByDay = await Transaction.aggregate([
@@ -447,15 +431,12 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
     { $sort: { '_id.year': 1, '_id.month': 1 } }
     ])
 
-    // ── ຄຳນວນກຳໄລ ──────────────────────────────────────────────────────
-    // laoQR: ກຳໄລ = feeLAK ທີ່ເກັບໄວ້ໃນ transaction ໂດຍກົງ
-    // topup/pay: ກຳໄລ = LAK × spread% / (100 + spread%)
+    // ກຳໄລ = feeLAK ທີ່ເກັບໃນ transaction (ທຸກ outgoing payment)
+    // topup/withdraw = 0
     const calcProfit = (row) => {
       const type = row._id.type
-      if (type === 'withdraw') return 0
-      if (type === 'laoQR') return row.totalFeeLAK || 0
-      if (spreadPercent <= 0) return 0
-      return Math.round(row.totalLAK * (spreadPercent / (100 + spreadPercent)))
+      if (type === 'topup' || type === 'withdraw') return 0
+      return row.totalFeeLAK || 0
     }
 
     const profitDayResult = profitByDay.map(row => ({
@@ -498,7 +479,6 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
     return res.json({
       success: true,
       data: {
-        spreadPercent,
         usdToLAKBase,
         totalProfitLAK,
         totalVolumeLAK,

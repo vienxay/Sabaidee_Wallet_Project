@@ -195,7 +195,11 @@ exports.pay = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ກະລຸນາລະບຸຈຳນວນ sats' });
         }
 
-        const amountLAK = await exchangeRate.convertSatsToLAK(amountSats);
+        const amountLAK   = await exchangeRate.convertSatsToLAK(amountSats);
+        const feePercent  = rate.laoQrFeePercent || 0;
+        const feeSats     = Math.ceil(amountSats * feePercent / 100);
+        const feeLAK      = Math.round(amountLAK  * feePercent / 100);
+        const totalSats   = amountSats + feeSats;
 
         if (amountLAK > limit.perTx) {
             return res.status(403).json({
@@ -225,10 +229,10 @@ exports.pay = async (req, res) => {
         }
 
         const MIN_RESERVE_SATS = 10;
-        if (balanceResult.balanceSats < amountSats + MIN_RESERVE_SATS) {
+        if (balanceResult.balanceSats < totalSats + MIN_RESERVE_SATS) {
             return res.status(400).json({
                 success: false,
-                message: `ຍອດເງິນບໍ່ພໍ (ມີ ${balanceResult.balanceSats} sats)`,
+                message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats ລວມຄ່າທຳນຽມ, ມີ ${balanceResult.balanceSats.toLocaleString()} sats)`,
             });
         }
 
@@ -237,9 +241,9 @@ exports.pay = async (req, res) => {
             paymentRequest: finalInvoice,
         });
 
-        // ✅ ແກ້ໄຂ: ດຶງ balance ຈິງຈາກ LNBits ຫຼັງຈ່າຍ
+        // ດຶງ balance ຈາກ LNBits ຫຼັງຈ່າຍ ແລ້ວຫັກຄ່າທຳນຽມ admin ອີກ
         const newBalance   = await lnbits.getBalance(wallet.invoiceKey);
-        wallet.balanceSats = Math.max(0, newBalance.balanceSats); // ຕ່ຳສຸດ = 0
+        wallet.balanceSats = Math.max(0, newBalance.balanceSats - feeSats);
         wallet.balanceLAK  = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
         await wallet.save();
 
@@ -250,7 +254,8 @@ exports.pay = async (req, res) => {
             status:         'success',
             amountSats,
             amountLAK,
-            feeSats:        payResult.feeSats || 0,
+            feeSats,
+            feeLAK,
             paymentHash:    payResult.paymentHash,
             paymentRequest: finalInvoice,
             memo:           description,
@@ -272,9 +277,12 @@ exports.pay = async (req, res) => {
                 paymentHash:   payResult.paymentHash,
                 amountSats,
                 amountLAK,
-                feeSats:       payResult.feeSats || 0,
-                balanceSats:   wallet.balanceSats, // ✅ ຄ່າຈິງຈາກ LNBits
-                balanceLAK:    wallet.balanceLAK,  // ✅ ເພີ່ມ
+                feeSats,
+                feeLAK,
+                feePercent,
+                totalSats,
+                balanceSats:   wallet.balanceSats,
+                balanceLAK:    wallet.balanceLAK,
                 rate: { btcToLAK: rate.btcToLAK, btcToUSD: rate.btcToUSD },
             },
         });

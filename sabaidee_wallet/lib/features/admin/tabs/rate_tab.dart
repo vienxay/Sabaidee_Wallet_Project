@@ -12,9 +12,8 @@ class RateTab extends StatefulWidget {
 
 class _RateTabState extends State<RateTab> {
   final _api = ApiClient.instance;
-  final _usdController    = TextEditingController();
-  final _spreadController = TextEditingController();
-  final _laoQrFeeCtrl     = TextEditingController();
+  final _usdController = TextEditingController();
+  final _feeCtrl       = TextEditingController();
   final _fmt = NumberFormat('#,##0', 'en_US');
   bool _loading = false;
   Map? _currentRate;
@@ -28,8 +27,7 @@ class _RateTabState extends State<RateTab> {
   @override
   void dispose() {
     _usdController.dispose();
-    _spreadController.dispose();
-    _laoQrFeeCtrl.dispose();
+    _feeCtrl.dispose();
     super.dispose();
   }
 
@@ -37,19 +35,16 @@ class _RateTabState extends State<RateTab> {
     if (!mounted) return;
     setState(() => _loading = true);
 
-    // ✅ ລຶບ bool success = false; ອອກ
     try {
       final res = await _api.get(AppConstants.adminRate);
       if (res.success && res.data?['rate'] != null) {
-        // ✅ ລຶບ success = true; ອອກ
         if (!mounted) return;
         setState(() {
           _currentRate = res.data!['rate'];
           _usdController.text =
               (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0)
                   .toString();
-          _spreadController.text = (_currentRate!['spreadPercent'] ?? 0).toString();
-          _laoQrFeeCtrl.text     = (_currentRate!['laoQrFeePercent'] ?? 0).toString();
+          _feeCtrl.text = (_currentRate!['laoQrFeePercent'] ?? 0).toString();
         });
       }
     } finally {
@@ -57,38 +52,23 @@ class _RateTabState extends State<RateTab> {
     }
   }
 
-  String _previewSell() {
-    final base = double.tryParse(_usdController.text) ?? 0;
-    final spread = double.tryParse(_spreadController.text) ?? 0;
-    if (base <= 0) return '-';
-    final sell = (base * (1 + spread / 100)).round();
-    return '${_fmt.format(sell)} ກີບ';
-  }
-
   Future<void> _update() async {
-    final usdToLAK       = double.tryParse(_usdController.text);
-    final spreadPercent  = double.tryParse(_spreadController.text) ?? 0;
-    final laoQrFeePercent = double.tryParse(_laoQrFeeCtrl.text) ?? 0;
+    final usdToLAK        = double.tryParse(_usdController.text);
+    final laoQrFeePercent = double.tryParse(_feeCtrl.text) ?? 0;
 
     if (usdToLAK == null || usdToLAK <= 0) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ')));
       return;
     }
-    if (spreadPercent < 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Spread % ຕ້ອງ >= 0')));
-      return;
-    }
     if (laoQrFeePercent < 0) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('ຄ່າທຳນຽມ LAO QR ຕ້ອງ >= 0')));
+          .showSnackBar(const SnackBar(content: Text('ຄ່າທຳນຽມຕ້ອງ >= 0')));
       return;
     }
 
     final res = await _api.post(AppConstants.adminUpdateRate, {
       'usdToLAK':        usdToLAK,
-      'spreadPercent':   spreadPercent,
       'laoQrFeePercent': laoQrFeePercent,
     });
 
@@ -97,7 +77,7 @@ class _RateTabState extends State<RateTab> {
       SnackBar(
         content: Text(
           res.success
-              ? '✅ ອັບເດດ Rate ສຳເລັດ (spread $spreadPercent%)'
+              ? '✅ ອັບເດດ Rate ສຳເລັດ (ຄ່າທຳນຽມ $laoQrFeePercent%)'
               : res.message,
         ),
         backgroundColor: res.success ? Colors.green : Colors.red,
@@ -149,48 +129,13 @@ class _RateTabState extends State<RateTab> {
                   const SizedBox(height: 16),
 
                   if (_currentRate != null) ...[
-                    _rateCard(
-                      'BTC → USD',
-                      _currentRate!['btcToUSD'],
-                      isUSD: true,
-                    ),
+                    _rateCard('BTC → USD', _currentRate!['btcToUSD'], isUSD: true),
                     _rateCard('BTC → LAK', _currentRate!['btcToLAK']),
                     _rateCard('USD → LAK', _currentRate!['usdToLAK']),
                     _rateCard('1 sat = LAK', null, rawDisplay: _satToLAK()),
                     _rateCard('1,000 sats', null, rawDisplay: _kSats()),
                     const SizedBox(height: 24),
                   ],
-
-                  // ✅ Preview ລາຄາຂາຍ — ແກ້ withOpacity → withValues
-                  if (_currentRate != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.withValues(alpha: 0.06), // ✅
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.teal.withValues(alpha: 0.3), // ✅
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'ລາຄາຂາຍ (ລວມ spread)',
-                            style: TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                          Text(
-                            _previewSell(),
-                            style: const TextStyle(
-                              color: Colors.teal,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
 
                   const Text(
                     'Base Rate (USD → LAK)',
@@ -200,49 +145,29 @@ class _RateTabState extends State<RateTab> {
                   TextField(
                     controller: _usdController,
                     keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: '1 USD = ? LAK',
                       border: OutlineInputBorder(),
                       suffixText: 'ກີບ',
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  const Text(
-                    'Spread % (ກຳໄລ BTC Exchange)',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _spreadController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      labelText: 'Spread %',
-                      hintText: '0 = ບໍ່ມີ spread',
-                      border: OutlineInputBorder(),
-                      suffixText: '%',
-                    ),
-                  ),
                   const SizedBox(height: 16),
 
                   const Text(
-                    'ຄ່າທຳນຽມ LAO QR (%)',
+                    'ຄ່າທຳນຽມ % (ໂອນ/ຈ່າຍ)',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'ຫັກຈາກທຸກການຈ່າຍ QR ຮ້ານຄ້າ — ກຳໄລຂອງແອັບ',
+                    'ຫັກຈາກທຸກການໂອນ/ຈ່າຍ — ກຳໄລຂອງແອັບ (Topup ບໍ່ຄິດ)',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: _laoQrFeeCtrl,
+                    controller: _feeCtrl,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
-                      labelText: 'ຄ່າທຳນຽມ LAO QR %',
+                      labelText: 'ຄ່າທຳນຽມ %',
                       hintText: '0 = ບໍ່ມີຄ່າທຳນຽມ',
                       border: OutlineInputBorder(),
                       suffixText: '%',
