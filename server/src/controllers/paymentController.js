@@ -23,6 +23,8 @@ const LAO_QR_LIMIT = {
   verified: 100_000_000,
 };
 
+const MIN_BALANCE_SATS = 5;
+
 const getStartOfDay = () => {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -225,10 +227,9 @@ exports.pay = async (req, res) => {
       });
     }
 
-    // ── Atomic: ກວດ + ຫັກ balance ພ້ອມກັນ (ກັນ race condition) ──
-    const MIN_RESERVE_SATS = 10;
+    // ── Atomic: ກວດ + ຫັກ balance (ຕ້ອງເຫຼືອຢ່າງໜ້ອຍ MIN_BALANCE_SATS) ──
     const atomicWallet = await Wallet.findOneAndUpdate(
-      { user: req.user._id, balanceSats: { $gte: totalSats + MIN_RESERVE_SATS } },
+      { user: req.user._id, balanceSats: { $gte: totalSats + MIN_BALANCE_SATS } },
       { $inc: { balanceSats: -totalSats } },
       { new: true },
     ).select('+adminKey');
@@ -242,7 +243,7 @@ exports.pay = async (req, res) => {
       }
       return res.status(400).json({
         success: false,
-        message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats ລວມຄ່າທຳນຽມ, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
+        message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats, ມີ ${wallet.balanceSats.toLocaleString()} sats — ຕ້ອງເຫຼືອຢ່າງໜ້ອຍ ${MIN_BALANCE_SATS} sats)`,
       });
     }
 
@@ -424,7 +425,7 @@ exports.payLaoQR = async (req, res) => {
 
     // ── Atomic: ກວດ + ຫັກ balance ພ້ອມກັນ (ກັນ race condition) ──
     const atomicWallet = await Wallet.findOneAndUpdate(
-      { user: userId, balanceSats: { $gte: totalSats } },
+      { user: userId, balanceSats: { $gte: totalSats + MIN_BALANCE_SATS } },
       { $inc: { balanceSats: -totalSats } },
       { new: true },
     );
@@ -438,7 +439,7 @@ exports.payLaoQR = async (req, res) => {
       }
       return res.status(400).json({
         success: false,
-        message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats ລວມຄ່າທຳນຽມ, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
+        message: `ຍອດເງິນບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats, ມີ ${wallet.balanceSats.toLocaleString()} sats — ຕ້ອງເຫຼືອຢ່າງໜ້ອຍ ${MIN_BALANCE_SATS} sats)`,
       });
     }
 
