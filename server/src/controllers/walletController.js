@@ -207,7 +207,7 @@ exports.withdraw = async (req, res) => {
     ]);
 
     const amountSats = decoded.amountSats;
-    const amountLAK  = await exchangeRate.convertSatsToLAK(amountSats);
+    const amountLAK = await exchangeRate.convertSatsToLAK(amountSats);
 
     // ── Atomic: ກວດ + ຫັກ balance ພ້ອມກັນ (ກັນ race condition) ──
     const wallet = await Wallet.findOneAndUpdate(
@@ -245,7 +245,7 @@ exports.withdraw = async (req, res) => {
 
     // ── Sync LNBits baseline ──
     const lnbitsAfter = await lnbits.getBalance(wallet.invoiceKey);
-    const finalLAK    = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
+    const finalLAK = await exchangeRate.convertSatsToLAK(wallet.balanceSats);
 
     await Wallet.updateOne(
       { user: req.user._id },
@@ -329,19 +329,23 @@ exports.checkPaymentStatus = async (req, res) => {
         { new: true },
       );
 
-      // Topup ສຳເລັດ → sync LNBits ເຕັມ (LNBits ຄືແຫຼ່ງຂໍ້ມູນ)
+      // Topup ສຳເລັດ → ໃຊ້ delta ເພື່ອບໍ່ດຶງເງິນເກົ່າກັບມາ
       const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
-      wallet.balanceSats = balanceResult.balanceSats;
-      wallet.lnbitsBaseSats = balanceResult.balanceSats;
+      const lnbitsCurrent = balanceResult.balanceSats;
+      const lnbitsBase = wallet.lnbitsBaseSats ?? lnbitsCurrent;
+      const topupDelta = Math.max(0, lnbitsCurrent - lnbitsBase);
+
+      wallet.balanceSats = Math.max(0, wallet.balanceSats + topupDelta);
+      wallet.lnbitsBaseSats = lnbitsCurrent;
       wallet.balanceLAK = await exchangeRate.convertSatsToLAK(
-        balanceResult.balanceSats,
+        wallet.balanceSats,
       );
       await wallet.save();
 
       if (tx) {
         createNotification({
           userId: req.user._id,
-          title: "✅ ເງິນເຂົ້າສຳເລັດ",
+          title: "ເງິນເຂົ້າສຳເລັດ",
           body: `ຮັບ ${tx.amountSats.toLocaleString()} sats (${tx.amountLAK.toLocaleString()} ກີບ)`,
           type: "topup",
           transactionId: tx._id,

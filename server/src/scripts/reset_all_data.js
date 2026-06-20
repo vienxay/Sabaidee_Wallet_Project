@@ -14,6 +14,7 @@ const { execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const mongoose = require('mongoose')
+const lnbits = require('../services/lnbitsService')
 
 const args = process.argv.slice(2)
 const isDryRun = args.includes('--dry-run')
@@ -169,10 +170,23 @@ async function resetAll() {
     const r = await db.collection('wallets').deleteMany({ user: { $nin: adminIds } })
     deleted.nonAdminWallets = r.deletedCount
 
-    if (adminWalletIds.length > 0) {
-      await db.collection('wallets').updateMany(
-        { _id: { $in: adminWalletIds } },
-        { $set: { balanceSats: 0, balanceLAK: 0, lnbitsBaseSats: null } }
+    // Sync lnbitsBaseSats ກັບ LNBits ແທ້ — ເພື່ອບໍ່ໃຫ້ເງິນເກົ່າກັບມາ
+    const adminWallets = await db.collection('wallets').find(
+      { _id: { $in: adminWalletIds } }
+    ).toArray()
+
+    for (const w of adminWallets) {
+      let lnbitsBase = 0
+      try {
+        const bal = await lnbits.getBalance(w.invoiceKey)
+        lnbitsBase = bal.balanceSats
+        console.log(`  LNBits sync [${w.walletName || w._id}]: ${lnbitsBase} sats`)
+      } catch {
+        console.log(`  LNBits unreachable for ${w.walletName || w._id} — set base=0`)
+      }
+      await db.collection('wallets').updateOne(
+        { _id: w._id },
+        { $set: { balanceSats: 0, balanceLAK: 0, lnbitsBaseSats: lnbitsBase } }
       )
     }
   }
