@@ -14,31 +14,16 @@ const {
   fetchInvoiceFromAddress,
 } = require("../utils/lightningUtils");
 
-const DEFAULTS = {
-  payPerTxUnverified: 500_000,
-  payDailyUnverified: 1_000_000,
-  payPerTxVerified: 5_000_000,
-  payDailyVerified: 20_000_000,
-  qrDailyUnverified: 2_000_000,
-  qrDailyVerified: 100_000_000,
-};
-
 const getLimits = async () => {
   const r = await Rate.findOne();
   return {
     pay: {
-      unverified: {
-        perTx: r?.payPerTxUnverified ?? DEFAULTS.payPerTxUnverified,
-        daily: r?.payDailyUnverified ?? DEFAULTS.payDailyUnverified,
-      },
-      verified: {
-        perTx: r?.payPerTxVerified ?? DEFAULTS.payPerTxVerified,
-        daily: r?.payDailyVerified ?? DEFAULTS.payDailyVerified,
-      },
+      unverified: { perTx: r.payPerTxUnverified, daily: r.payDailyUnverified },
+      verified:   { perTx: r.payPerTxVerified,   daily: r.payDailyVerified },
     },
     qr: {
-      unverified: r?.qrDailyUnverified ?? DEFAULTS.qrDailyUnverified,
-      verified: r?.qrDailyVerified ?? DEFAULTS.qrDailyVerified,
+      unverified: r.qrDailyUnverified,
+      verified:   r.qrDailyVerified,
     },
   };
 };
