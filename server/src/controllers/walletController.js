@@ -324,25 +324,25 @@ exports.checkPaymentStatus = async (req, res) => {
 
     if (result.paid) {
       const tx = await Transaction.findOneAndUpdate(
-        { paymentHash, user: req.user._id },
+        { paymentHash, user: req.user._id, status: "pending" },
         { status: "success" },
         { new: true },
       );
 
-      // Topup ສຳເລັດ → ໃຊ້ delta ເພື່ອບໍ່ດຶງເງິນເກົ່າກັບມາ
-      const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
-      const lnbitsCurrent = balanceResult.balanceSats;
-      const lnbitsBase = wallet.lnbitsBaseSats ?? lnbitsCurrent;
-      const topupDelta = Math.max(0, lnbitsCurrent - lnbitsBase);
-
-      wallet.balanceSats = Math.max(0, wallet.balanceSats + topupDelta);
-      wallet.lnbitsBaseSats = lnbitsCurrent;
-      wallet.balanceLAK = await exchangeRate.convertSatsToLAK(
-        wallet.balanceSats,
-      );
-      await wallet.save();
-
+      // ບວກ balance ສະເພາະຄັ້ງທຳອິດທີ່ status ປ່ຽນຈາກ pending → success
       if (tx) {
+        const balanceResult = await lnbits.getBalance(wallet.invoiceKey);
+        const lnbitsCurrent = balanceResult.balanceSats;
+        const lnbitsBase = wallet.lnbitsBaseSats ?? lnbitsCurrent;
+        const topupDelta = Math.max(0, lnbitsCurrent - lnbitsBase);
+
+        wallet.balanceSats = Math.max(0, wallet.balanceSats + topupDelta);
+        wallet.lnbitsBaseSats = lnbitsCurrent;
+        wallet.balanceLAK = await exchangeRate.convertSatsToLAK(
+          wallet.balanceSats,
+        );
+        await wallet.save();
+
         createNotification({
           userId: req.user._id,
           title: "ເງິນເຂົ້າສຳເລັດ",

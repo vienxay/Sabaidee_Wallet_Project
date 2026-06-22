@@ -20,13 +20,15 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
   String? _paymentHash;
   String? _error;
   Timer? _pollTimer;
+  Timer? _debounce;
   bool _paid = false;
-  int _amountSats = 0; // ✅ ເພີ່ມ: preview sats
-  int _amountLAK = 0; // ✅ ເພີ່ມ: ເກັບ LAK
+  int _amountSats = 0;
+  int _amountLAK = 0;
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _debounce?.cancel();
     _amountCtrl.dispose();
     super.dispose();
   }
@@ -120,19 +122,21 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     );
   }
 
-  // ✅ ເພີ່ມ: update preview ຂະນະ user ໃສ່
-  Future<void> _onAmountChanged(String val) async {
+  void _onAmountChanged(String val) {
     final lak = int.tryParse(val) ?? 0;
     if (lak <= 0) {
       setState(() => _amountSats = 0);
       return;
     }
-    final rateRes = await WalletService.instance.getRate();
-    if (!mounted) return;
-    if (rateRes.success && rateRes.data != null) {
-      final sats = ((lak / rateRes.data!.btcToLAK) * 100_000_000).round();
-      setState(() => _amountSats = sats);
-    }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      final rateRes = await WalletService.instance.getRate();
+      if (!mounted) return;
+      if (rateRes.success && rateRes.data != null) {
+        final sats = ((lak / rateRes.data!.btcToLAK) * 100_000_000).round();
+        setState(() => _amountSats = sats);
+      }
+    });
   }
 
   @override
