@@ -247,6 +247,12 @@ router.get('/rate', protect, staffOrAdmin, async (req, res) => {
                 btcToUSD,
                 btcToLAK,
                 updatedAt       : rateDoc?.updatedAt,
+                payPerTxUnverified : rateDoc?.payPerTxUnverified ?? 500_000,
+                payDailyUnverified : rateDoc?.payDailyUnverified ?? 1_000_000,
+                payPerTxVerified   : rateDoc?.payPerTxVerified   ?? 5_000_000,
+                payDailyVerified   : rateDoc?.payDailyVerified   ?? 20_000_000,
+                qrDailyUnverified  : rateDoc?.qrDailyUnverified  ?? 2_000_000,
+                qrDailyVerified    : rateDoc?.qrDailyVerified    ?? 100_000_000,
             },
         });
     } catch (error) {
@@ -257,7 +263,12 @@ router.get('/rate', protect, staffOrAdmin, async (req, res) => {
 // ── POST /api/admin/rate/update ──────────────────────────────────────────
 router.post('/rate/update', protect, adminOnly, async (req, res) => {
     try {
-        const { usdToLAK, laoQrFeePercent } = req.body;
+        const {
+            usdToLAK, laoQrFeePercent,
+            payPerTxUnverified, payDailyUnverified,
+            payPerTxVerified, payDailyVerified,
+            qrDailyUnverified, qrDailyVerified,
+        } = req.body;
 
         if (!usdToLAK || usdToLAK <= 0)
             return res.status(400).json({ success: false, message: 'ໃສ່ usdToLAK ທີ່ຖືກຕ້ອງ' });
@@ -299,9 +310,13 @@ router.post('/rate/update', protect, adminOnly, async (req, res) => {
             btcToUSD,
             btcToLAK,
         };
-        if (laoQrFeePercent !== undefined) {
-            setFields.laoQrFeePercent = Number(laoQrFeePercent);
-        }
+        if (laoQrFeePercent !== undefined) setFields.laoQrFeePercent = Number(laoQrFeePercent);
+        if (payPerTxUnverified !== undefined) setFields.payPerTxUnverified = Number(payPerTxUnverified);
+        if (payDailyUnverified !== undefined) setFields.payDailyUnverified = Number(payDailyUnverified);
+        if (payPerTxVerified !== undefined)   setFields.payPerTxVerified   = Number(payPerTxVerified);
+        if (payDailyVerified !== undefined)   setFields.payDailyVerified   = Number(payDailyVerified);
+        if (qrDailyUnverified !== undefined)  setFields.qrDailyUnverified  = Number(qrDailyUnverified);
+        if (qrDailyVerified !== undefined)    setFields.qrDailyVerified    = Number(qrDailyVerified);
 
         const rate = await Rate.findOneAndUpdate(
             {},

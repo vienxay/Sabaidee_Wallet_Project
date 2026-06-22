@@ -14,6 +14,12 @@ class _RateTabState extends State<RateTab> {
   final _api = ApiClient.instance;
   final _usdController = TextEditingController();
   final _feeCtrl       = TextEditingController();
+  final _payPerTxUnverifiedCtrl  = TextEditingController();
+  final _payDailyUnverifiedCtrl  = TextEditingController();
+  final _payPerTxVerifiedCtrl    = TextEditingController();
+  final _payDailyVerifiedCtrl    = TextEditingController();
+  final _qrDailyUnverifiedCtrl   = TextEditingController();
+  final _qrDailyVerifiedCtrl     = TextEditingController();
   final _fmt = NumberFormat('#,##0', 'en_US');
   bool _loading = false;
   Map? _currentRate;
@@ -28,6 +34,12 @@ class _RateTabState extends State<RateTab> {
   void dispose() {
     _usdController.dispose();
     _feeCtrl.dispose();
+    _payPerTxUnverifiedCtrl.dispose();
+    _payDailyUnverifiedCtrl.dispose();
+    _payPerTxVerifiedCtrl.dispose();
+    _payDailyVerifiedCtrl.dispose();
+    _qrDailyUnverifiedCtrl.dispose();
+    _qrDailyVerifiedCtrl.dispose();
     super.dispose();
   }
 
@@ -41,10 +53,14 @@ class _RateTabState extends State<RateTab> {
         if (!mounted) return;
         setState(() {
           _currentRate = res.data!['rate'];
-          _usdController.text =
-              (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0)
-                  .toString();
+          _usdController.text = (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0).toString();
           _feeCtrl.text = (_currentRate!['laoQrFeePercent'] ?? 0).toString();
+          _payPerTxUnverifiedCtrl.text = (_currentRate!['payPerTxUnverified'] ?? 500000).toString();
+          _payDailyUnverifiedCtrl.text = (_currentRate!['payDailyUnverified'] ?? 1000000).toString();
+          _payPerTxVerifiedCtrl.text   = (_currentRate!['payPerTxVerified'] ?? 5000000).toString();
+          _payDailyVerifiedCtrl.text   = (_currentRate!['payDailyVerified'] ?? 20000000).toString();
+          _qrDailyUnverifiedCtrl.text  = (_currentRate!['qrDailyUnverified'] ?? 2000000).toString();
+          _qrDailyVerifiedCtrl.text    = (_currentRate!['qrDailyVerified'] ?? 100000000).toString();
         });
       }
     } finally {
@@ -70,6 +86,12 @@ class _RateTabState extends State<RateTab> {
     final res = await _api.post(AppConstants.adminUpdateRate, {
       'usdToLAK':        usdToLAK,
       'laoQrFeePercent': laoQrFeePercent,
+      'payPerTxUnverified': int.tryParse(_payPerTxUnverifiedCtrl.text) ?? 500000,
+      'payDailyUnverified': int.tryParse(_payDailyUnverifiedCtrl.text) ?? 1000000,
+      'payPerTxVerified':   int.tryParse(_payPerTxVerifiedCtrl.text) ?? 5000000,
+      'payDailyVerified':   int.tryParse(_payDailyVerifiedCtrl.text) ?? 20000000,
+      'qrDailyUnverified':  int.tryParse(_qrDailyUnverifiedCtrl.text) ?? 2000000,
+      'qrDailyVerified':    int.tryParse(_qrDailyVerifiedCtrl.text) ?? 100000000,
     });
 
     if (!mounted) return;
@@ -175,6 +197,36 @@ class _RateTabState extends State<RateTab> {
                   ),
                   const SizedBox(height: 16),
 
+                  const SizedBox(height: 8),
+                  const Text(
+                    'ວົງເງິນ Lightning (LAK)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'ກຳນົດວົງເງິນສຳລັບການຈ່າຍ Lightning Invoice',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  _limitField(_payPerTxUnverifiedCtrl, 'ຕໍ່ຄັ້ງ (ບໍ່ KYC)'),
+                  _limitField(_payDailyUnverifiedCtrl, 'ຕໍ່ມື້ (ບໍ່ KYC)'),
+                  _limitField(_payPerTxVerifiedCtrl,   'ຕໍ່ຄັ້ງ (KYC ແລ້ວ)'),
+                  _limitField(_payDailyVerifiedCtrl,   'ຕໍ່ມື້ (KYC ແລ້ວ)'),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'ວົງເງິນ LAO QR (LAK)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'ກຳນົດວົງເງິນສຳລັບການຈ່າຍ LAO QR ຕໍ່ມື້',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  _limitField(_qrDailyUnverifiedCtrl, 'ຕໍ່ມື້ (ບໍ່ KYC)'),
+                  _limitField(_qrDailyVerifiedCtrl,   'ຕໍ່ມື້ (KYC ແລ້ວ)'),
+                  const SizedBox(height: 20),
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -184,7 +236,7 @@ class _RateTabState extends State<RateTab> {
                       ),
                       onPressed: _update,
                       child: const Text(
-                        'ອັບເດດ Rate',
+                        'ອັບເດດ Rate & Limits',
                         style: TextStyle(color: Colors.white, fontSize: 16),
                       ),
                     ),
@@ -193,6 +245,22 @@ class _RateTabState extends State<RateTab> {
               ),
             ),
           );
+  }
+
+  Widget _limitField(TextEditingController ctrl, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixText: 'ກີບ',
+          isDense: true,
+        ),
+      ),
+    );
   }
 
   Widget _rateCard(

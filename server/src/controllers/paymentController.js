@@ -3,6 +3,7 @@ const Wallet = require("../models/Wallet");
 const { createNotification } = require("./notificationController");
 const Transaction = require("../models/Transaction");
 const Kyc = require("../models/Kyc");
+const Rate = require("../models/Rate");
 const lnbits = require("../services/lnbitsService");
 const exchangeRate = require("../services/exchangeRateService");
 const {
@@ -13,14 +14,33 @@ const {
   fetchInvoiceFromAddress,
 } = require("../utils/lightningUtils");
 
-const LIMIT = {
-  unverified: { perTx: 500_000, daily: 1_000_000 },
-  verified: { perTx: 5_000_000, daily: 20_000_000 },
+const DEFAULTS = {
+  payPerTxUnverified: 500_000,
+  payDailyUnverified: 1_000_000,
+  payPerTxVerified: 5_000_000,
+  payDailyVerified: 20_000_000,
+  qrDailyUnverified: 2_000_000,
+  qrDailyVerified: 100_000_000,
 };
 
-const LAO_QR_LIMIT = {
-  unverified: 2_000_000,
-  verified: 100_000_000,
+const getLimits = async () => {
+  const r = await Rate.findOne();
+  return {
+    pay: {
+      unverified: {
+        perTx: r?.payPerTxUnverified ?? DEFAULTS.payPerTxUnverified,
+        daily: r?.payDailyUnverified ?? DEFAULTS.payDailyUnverified,
+      },
+      verified: {
+        perTx: r?.payPerTxVerified ?? DEFAULTS.payPerTxVerified,
+        daily: r?.payDailyVerified ?? DEFAULTS.payDailyVerified,
+      },
+    },
+    qr: {
+      unverified: r?.qrDailyUnverified ?? DEFAULTS.qrDailyUnverified,
+      verified: r?.qrDailyVerified ?? DEFAULTS.qrDailyVerified,
+    },
+  };
 };
 
 const MIN_BALANCE_SATS = 5;
@@ -162,7 +182,8 @@ exports.pay = async (req, res) => {
 
     const kyc = await Kyc.findOne({ user: req.user._id });
     const isKYCVerified = kyc?.status === "verified";
-    const limit = isKYCVerified ? LIMIT.verified : LIMIT.unverified;
+    const limits = await getLimits();
+    const limit = isKYCVerified ? limits.pay.verified : limits.pay.unverified;
 
     const input = paymentRequest.trim();
     const isAddr = isLightningAddress(input);
@@ -356,15 +377,16 @@ exports.payLaoQR = async (req, res) => {
     const userId = req.user._id;
     const { amountLAK, merchantName, bank, qrRaw, description } = req.body;
 
-    if (!amountLAK || amountLAK <= 0) {
+    if (!amountLAK || amountLAK < 10) {
       return res
         .status(400)
-        .json({ success: false, message: "ກະລຸນາລະບຸຈຳນວນເງິນ" });
+        .json({ success: false, message: "ຈຳນວນເງິນຕ່ຳສຸດ 10 ກີບ" });
     }
 
-    const [kyc, wallet] = await Promise.all([
+    const [kyc, wallet, limits] = await Promise.all([
       Kyc.findOne({ user: userId }),
       Wallet.findOne({ user: userId }).select("+adminKey"),
+      getLimits(),
     ]);
 
     if (!wallet) {
@@ -373,8 +395,8 @@ exports.payLaoQR = async (req, res) => {
 
     const isKYCVerified = kyc?.status === "verified";
     const dailyLimit = isKYCVerified
-      ? LAO_QR_LIMIT.verified
-      : LAO_QR_LIMIT.unverified;
+      ? limits.qr.verified
+      : limits.qr.unverified;
 
     const todaySpent = await getDailyLaoQRSpentLAK(userId);
     const remaining = dailyLimit - todaySpent;
@@ -511,14 +533,15 @@ exports.payLaoQR = async (req, res) => {
 exports.getLaoQRLimitStatus = async (req, res) => {
   try {
     const userId = req.user._id;
-    const [kyc, rate] = await Promise.all([
+    const [kyc, rate, limits] = await Promise.all([
       Kyc.findOne({ user: userId }),
       exchangeRate.getExchangeRate(),
+      getLimits(),
     ]);
     const isKYCVerified = kyc?.status === "verified";
     const dailyLimit = isKYCVerified
-      ? LAO_QR_LIMIT.verified
-      : LAO_QR_LIMIT.unverified;
+      ? limits.qr.verified
+      : limits.qr.unverified;
 
     const todaySpent = await getDailyLaoQRSpentLAK(userId);
     const remaining = dailyLimit - todaySpent;

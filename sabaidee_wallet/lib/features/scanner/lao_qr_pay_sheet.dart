@@ -541,7 +541,7 @@ class _LaoQRPaySheetState extends State<LaoQRPaySheet> {
     validator: (v) {
       if (v == null || v.isEmpty) return 'ກະລຸນາໃສ່ຈຳນວນເງິນ';
       final n = int.tryParse(v.replaceAll(',', ''));
-      if (n == null || n < 1000) return 'ຕ້ອງຢ່າງໜ້ອຍ 1,000 ກີບ';
+      if (n == null || n < 10) return 'ຕ້ອງຢ່າງໜ້ອຍ 10 ກີບ';
       return null;
     },
     onChanged: (_) => setState(() {}),
