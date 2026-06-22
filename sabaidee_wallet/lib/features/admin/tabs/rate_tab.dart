@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../services/api_client.dart';
 import '../../../../core/app_constants.dart';
 import 'package:intl/intl.dart';
@@ -55,12 +56,12 @@ class _RateTabState extends State<RateTab> {
           _currentRate = res.data!['rate'];
           _usdController.text = (_currentRate!['usdToLAKBase'] ?? _currentRate!['usdToLAK'] ?? 0).toString();
           _feeCtrl.text = (_currentRate!['laoQrFeePercent'] ?? 0).toString();
-          _payPerTxUnverifiedCtrl.text = (_currentRate!['payPerTxUnverified'] ?? 500000).toString();
-          _payDailyUnverifiedCtrl.text = (_currentRate!['payDailyUnverified'] ?? 1000000).toString();
-          _payPerTxVerifiedCtrl.text   = (_currentRate!['payPerTxVerified'] ?? 5000000).toString();
-          _payDailyVerifiedCtrl.text   = (_currentRate!['payDailyVerified'] ?? 20000000).toString();
-          _qrDailyUnverifiedCtrl.text  = (_currentRate!['qrDailyUnverified'] ?? 2000000).toString();
-          _qrDailyVerifiedCtrl.text    = (_currentRate!['qrDailyVerified'] ?? 100000000).toString();
+          _payPerTxUnverifiedCtrl.text = _fmtLimit(_currentRate!['payPerTxUnverified'] ?? 500000);
+          _payDailyUnverifiedCtrl.text = _fmtLimit(_currentRate!['payDailyUnverified'] ?? 1000000);
+          _payPerTxVerifiedCtrl.text   = _fmtLimit(_currentRate!['payPerTxVerified'] ?? 5000000);
+          _payDailyVerifiedCtrl.text   = _fmtLimit(_currentRate!['payDailyVerified'] ?? 20000000);
+          _qrDailyUnverifiedCtrl.text  = _fmtLimit(_currentRate!['qrDailyUnverified'] ?? 2000000);
+          _qrDailyVerifiedCtrl.text    = _fmtLimit(_currentRate!['qrDailyVerified'] ?? 100000000);
         });
       }
     } finally {
@@ -86,12 +87,12 @@ class _RateTabState extends State<RateTab> {
     final res = await _api.post(AppConstants.adminUpdateRate, {
       'usdToLAK':        usdToLAK,
       'laoQrFeePercent': laoQrFeePercent,
-      'payPerTxUnverified': int.tryParse(_payPerTxUnverifiedCtrl.text) ?? 500000,
-      'payDailyUnverified': int.tryParse(_payDailyUnverifiedCtrl.text) ?? 1000000,
-      'payPerTxVerified':   int.tryParse(_payPerTxVerifiedCtrl.text) ?? 5000000,
-      'payDailyVerified':   int.tryParse(_payDailyVerifiedCtrl.text) ?? 20000000,
-      'qrDailyUnverified':  int.tryParse(_qrDailyUnverifiedCtrl.text) ?? 2000000,
-      'qrDailyVerified':    int.tryParse(_qrDailyVerifiedCtrl.text) ?? 100000000,
+      'payPerTxUnverified': _parseLimit(_payPerTxUnverifiedCtrl.text),
+      'payDailyUnverified': _parseLimit(_payDailyUnverifiedCtrl.text),
+      'payPerTxVerified':   _parseLimit(_payPerTxVerifiedCtrl.text),
+      'payDailyVerified':   _parseLimit(_payDailyVerifiedCtrl.text),
+      'qrDailyUnverified':  _parseLimit(_qrDailyUnverifiedCtrl.text),
+      'qrDailyVerified':    _parseLimit(_qrDailyVerifiedCtrl.text),
     });
 
     if (!mounted) return;
@@ -247,12 +248,16 @@ class _RateTabState extends State<RateTab> {
           );
   }
 
+  String _fmtLimit(dynamic v) => _fmt.format((v as num?)?.toInt() ?? 0);
+  int _parseLimit(String s) => int.tryParse(s.replaceAll(',', '')) ?? 0;
+
   Widget _limitField(TextEditingController ctrl, String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
         controller: ctrl,
         keyboardType: TextInputType.number,
+        inputFormatters: [_ThousandFormatter()],
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -292,6 +297,26 @@ class _RateTabState extends State<RateTab> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ThousandFormatter extends TextInputFormatter {
+  static final _fmt = NumberFormat('#,##0', 'en_US');
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final raw = newValue.text.replaceAll(',', '');
+    if (raw.isEmpty) return newValue.copyWith(text: '');
+    final n = int.tryParse(raw);
+    if (n == null) return oldValue;
+    final formatted = _fmt.format(n);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
