@@ -16,7 +16,11 @@ exports.getTransactions = async (req, res) => {
         const skip  = (page - 1) * limit;
 
         const filter = { user: req.user._id };
-        if (type) filter.type = type; // filter ສະເພາະ type ຖ້າສ່ົງ query
+        if (type === 'pay') {
+            filter.type = { $in: ['pay', 'laoQR'] };
+        } else if (type) {
+            filter.type = type;
+        }
 
         // ດຶງ transactions ແລະ total count ພ້ອມກັນ (parallel) ເພື່ອ performance
         const [transactions, total] = await Promise.all([

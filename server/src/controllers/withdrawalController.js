@@ -121,15 +121,19 @@ exports.previewWithdrawal = async (req, res) => {
             });
         }
 
-        // ── ຄຳນວນ sats ───────────────────────────────────────────────────────
-        const amountSats = await exchangeRate.convertLAKToSats(amountLAK);
+        // ── ຄຳນວນ sats + fee ─────────────────────────────────────────────────
+        const amountSats  = await exchangeRate.convertLAKToSats(amountLAK);
+        const feePercent  = rate.laoQrFeePercent || 0;
+        const feeSats     = Math.ceil((amountSats * feePercent) / 100);
+        const feeLAK      = Math.round((amountLAK * feePercent) / 100);
+        const totalSats   = amountSats + feeSats;
 
         if (amountSats < 1) {
             return res.status(400).json({ success: false, message: 'ຈຳນວນໜ້ອຍເກີນໄປ (ຕ່ຳສຸດ 1 sat)' });
         }
 
         // ── ກວດ balance ──────────────────────────────────────────────────────
-        if (wallet.balanceSats < amountSats) {
+        if (wallet.balanceSats < totalSats) {
             return res.status(400).json({ success: false, message: 'ຍອດ sats ບໍ່ພໍ' });
         }
 
@@ -146,7 +150,10 @@ exports.previewWithdrawal = async (req, res) => {
             destination:     destination.trim(),
             amountLAK,
             amountSats,
-            estimatedFeeSats: 0, // withdrawal ບໍ່ເກັບ fee ຈາກ user
+            feeSats,
+            feeLAK,
+            feePercent,
+            totalSats,
             balanceSats:     wallet.balanceSats,
             rate: {
                 btcToLAK: rate.btcToLAK,
@@ -209,6 +216,10 @@ exports.sendWithdrawal = async (req, res) => {
 
         // ── ຄຳນວນ sats + ຄ່າທຳນຽມ % ──────────────────────────────────────
         const amountSats  = await exchangeRate.convertLAKToSats(amountLAK);
+        const feePercent  = rate.laoQrFeePercent || 0;
+        const feeSats     = Math.ceil((amountSats * feePercent) / 100);
+        const feeLAK      = Math.round((amountLAK * feePercent) / 100);
+        const totalSats   = amountSats + feeSats;
 
         if (amountSats < 1) {
             return res.status(400).json({ success: false, message: 'ຈຳນວນໜ້ອຍເກີນໄປ (ຕ່ຳສຸດ 1 sat)' });
@@ -216,15 +227,15 @@ exports.sendWithdrawal = async (req, res) => {
 
         // ── Atomic: ກວດ + ຫັກ balance ພ້ອມກັນ (ກັນ race condition) ──
         const atomicWallet = await Wallet.findOneAndUpdate(
-            { user: userId, balanceSats: { $gte: amountSats } },
-            { $inc: { balanceSats: -amountSats } },
+            { user: userId, balanceSats: { $gte: totalSats } },
+            { $inc: { balanceSats: -totalSats } },
             { new: true },
         ).select('+adminKey');
 
         if (!atomicWallet) {
             return res.status(400).json({
                 success: false,
-                message: `ຍອດ sats ບໍ່ພໍ (ຕ້ອງການ ${amountSats.toLocaleString()} sats, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
+                message: `ຍອດ sats ບໍ່ພໍ (ຕ້ອງການ ${totalSats.toLocaleString()} sats, ມີ ${wallet.balanceSats.toLocaleString()} sats)`,
             });
         }
 
@@ -255,14 +266,19 @@ exports.sendWithdrawal = async (req, res) => {
             // LNBits ລົ້ມເຫຼວ → ຄືນເງິນທີ່ຫັກໄວ້
             await Wallet.updateOne(
                 { user: userId },
-                { $inc: { balanceSats: amountSats } },
+                { $inc: { balanceSats: totalSats } },
             );
             throw lnbitsErr;
         }
 
+        // ── ເກັບຄ່າທຳນຽມເຂົ້າ admin wallet ──
+        if (feeSats > 0) {
+            await lnbits.collectFee({ userAdminKey: atomicWallet.adminKey, feeSats });
+        }
+
         // ── Sync balance: ຫັກ routing fee ເພີ່ມ ──────────────────────────────
         const lnbitsAfter  = await lnbits.getBalance(atomicWallet.invoiceKey);
-        const routingFee   = Math.max(0, (atomicWallet.balanceSats + amountSats) - lnbitsAfter.balanceSats - amountSats);
+        const routingFee   = Math.max(0, (atomicWallet.balanceSats + totalSats) - lnbitsAfter.balanceSats - amountSats);
         const finalSats    = Math.max(0, atomicWallet.balanceSats - routingFee);
         const finalLAK     = await exchangeRate.convertSatsToLAK(finalSats);
         await Wallet.updateOne({ user: userId }, {
@@ -277,7 +293,8 @@ exports.sendWithdrawal = async (req, res) => {
             status:          'success',
             amountSats,
             amountLAK,
-            feeSats:         0,
+            feeSats,
+            feeLAK,
             paymentHash:     payResult.paymentHash,
             paymentRequest,
             destination:     destination.trim(),
@@ -301,7 +318,10 @@ exports.sendWithdrawal = async (req, res) => {
             destinationType: destType,
             amountSats,
             amountLAK,
-            feeSats:       0,
+            feeSats,
+            feeLAK,
+            feePercent,
+            totalSats,
             balanceSats:   finalSats,
             createdAt:     transaction.createdAt,
             rate: {

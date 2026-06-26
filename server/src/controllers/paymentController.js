@@ -19,11 +19,11 @@ const getLimits = async () => {
   return {
     pay: {
       unverified: { perTx: r.payPerTxUnverified, daily: r.payDailyUnverified },
-      verified:   { perTx: r.payPerTxVerified,   daily: r.payDailyVerified },
+      verified: { perTx: r.payPerTxVerified, daily: r.payDailyVerified },
     },
     qr: {
       unverified: r.qrDailyUnverified,
-      verified:   r.qrDailyVerified,
+      verified: r.qrDailyVerified,
     },
   };
 };
@@ -235,10 +235,13 @@ exports.pay = async (req, res) => {
 
     // ── Atomic: ກວດ + ຫັກ balance (ຕ້ອງເຫຼືອຢ່າງໜ້ອຍ MIN_BALANCE_SATS) ──
     const atomicWallet = await Wallet.findOneAndUpdate(
-      { user: req.user._id, balanceSats: { $gte: totalSats + MIN_BALANCE_SATS } },
+      {
+        user: req.user._id,
+        balanceSats: { $gte: totalSats + MIN_BALANCE_SATS },
+      },
       { $inc: { balanceSats: -totalSats } },
       { new: true },
-    ).select('+adminKey');
+    ).select("+adminKey");
 
     if (!atomicWallet) {
       if (wallet.balanceSats <= 0) {
@@ -268,12 +271,22 @@ exports.pay = async (req, res) => {
       throw lnbitsErr;
     }
 
+    // ── ເກັບຄ່າທຳນຽມເຂົ້າ admin wallet ──
+    if (feeSats > 0) {
+      await lnbits.collectFee({ userAdminKey: atomicWallet.adminKey, feeSats });
+    }
+
     // ── Sync LNBits baseline + update LAK ──
     const newBalance = await lnbits.getBalance(atomicWallet.invoiceKey);
-    const finalLAK   = await exchangeRate.convertSatsToLAK(atomicWallet.balanceSats);
-    await Wallet.updateOne({ user: req.user._id }, {
-      $set: { lnbitsBaseSats: newBalance.balanceSats, balanceLAK: finalLAK },
-    });
+    const finalLAK = await exchangeRate.convertSatsToLAK(
+      atomicWallet.balanceSats,
+    );
+    await Wallet.updateOne(
+      { user: req.user._id },
+      {
+        $set: { lnbitsBaseSats: newBalance.balanceSats, balanceLAK: finalLAK },
+      },
+    );
 
     const transaction = await Transaction.create({
       user: req.user._id,
@@ -324,7 +337,9 @@ exports.pay = async (req, res) => {
     });
   } catch (error) {
     console.error("Pay Error:", error);
-    return res.status(500).json({ success: false, message: "ເກີດຂໍ້ຜິດພາດໃນການຈ່າຍເງິນ" });
+    return res
+      .status(500)
+      .json({ success: false, message: "ເກີດຂໍ້ຜິດພາດໃນການຈ່າຍເງິນ" });
   }
 };
 
@@ -450,12 +465,23 @@ exports.payLaoQR = async (req, res) => {
       });
     }
 
-    // ── Sync LNBits baseline + LAK (LNBits ບໍ່ປ່ຽນສຳລັບ laoQR) ──
+    // ── ໂອນ sats ທັງໝົດ (ເງິນ + fee) ເຂົ້າ admin wallet ──
+    // LAO QR ບໍ່ມີ Lightning payment ອອກ → sats ຍັງຄ້າງໃນ user LNBits
+    if (totalSats > 0) {
+      await lnbits.collectFee({ userAdminKey: wallet.adminKey, feeSats: totalSats });
+    }
+
+    // ── Sync LNBits baseline + LAK ──
     const lnbitsSnap = await lnbits.getBalance(wallet.invoiceKey);
-    const finalLAK   = await exchangeRate.convertSatsToLAK(atomicWallet.balanceSats);
-    await Wallet.updateOne({ user: userId }, {
-      $set: { lnbitsBaseSats: lnbitsSnap.balanceSats, balanceLAK: finalLAK },
-    });
+    const finalLAK = await exchangeRate.convertSatsToLAK(
+      atomicWallet.balanceSats,
+    );
+    await Wallet.updateOne(
+      { user: userId },
+      {
+        $set: { lnbitsBaseSats: lnbitsSnap.balanceSats, balanceLAK: finalLAK },
+      },
+    );
 
     const tx = await Transaction.create({
       user: userId,
@@ -508,7 +534,9 @@ exports.payLaoQR = async (req, res) => {
     });
   } catch (error) {
     console.error("LAO QR Pay Error:", error);
-    return res.status(500).json({ success: false, message: "ເກີດຂໍ້ຜິດພາດໃນການຈ່າຍ LAO QR" });
+    return res
+      .status(500)
+      .json({ success: false, message: "ເກີດຂໍ້ຜິດພາດໃນການຈ່າຍ LAO QR" });
   }
 };
 

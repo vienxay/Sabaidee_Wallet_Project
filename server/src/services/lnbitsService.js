@@ -144,6 +144,31 @@ const lnbitsService = {
         }
     },
 
+    collectFee: async ({ userAdminKey, feeSats }) => {
+        const feeInvoiceKey = process.env.ADMIN_FEE_INVOICE_KEY;
+        if (!feeInvoiceKey || feeSats <= 0) return null;
+
+        try {
+            const { data: inv } = await axios.post(
+                `${LNBITS_URL()}/api/v1/payments`,
+                { out: false, amount: feeSats, memo: 'Sabaidee fee' },
+                { headers: headers(feeInvoiceKey), timeout: TIMEOUT },
+            );
+
+            const { data: pay } = await axios.post(
+                `${LNBITS_URL()}/api/v1/payments`,
+                { out: true, bolt11: inv.payment_request },
+                { headers: headers(userAdminKey), timeout: TIMEOUT },
+            );
+
+            console.log(`💰 Fee collected: ${feeSats} sats → admin wallet`);
+            return pay.payment_hash;
+        } catch (error) {
+            console.error('⚠️ Fee collection failed:', error.response?.data || error.message);
+            return null;
+        }
+    },
+
     checkPaymentStatus: async ({ invoiceKey, paymentHash }) => {
         try {
             const { data } = await axios.get(`${LNBITS_URL()}/api/v1/payments/${paymentHash}`, {
