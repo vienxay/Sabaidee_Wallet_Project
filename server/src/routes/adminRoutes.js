@@ -475,17 +475,15 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
     }))
 
     // ── ກຳໄລລວມ ─────────────────────────────────────────────────────────
-    const totalProfitLAK = profitMonthResult
-      .filter(r => r._id.type !== 'withdraw')
-      .reduce((s, r) => s + r.profitLAK, 0)
+    const nonWithdraw = profitMonthResult.filter(r => r._id.type !== 'withdraw')
+    const withdrawRows = profitMonthResult.filter(r => r._id.type === 'withdraw')
 
-    const totalVolumeLAK = profitMonthResult
-      .filter(r => r._id.type !== 'withdraw')
-      .reduce((s, r) => s + r.totalLAK, 0)
-
-    const totalWithdrawLAK = profitMonthResult
-      .filter(r => r._id.type === 'withdraw')
-      .reduce((s, r) => s + r.totalLAK, 0)
+    const totalProfitLAK  = nonWithdraw.reduce((s, r) => s + r.profitLAK, 0)
+    const totalProfitSats = nonWithdraw.reduce((s, r) => s + (r.totalFeeSats || 0), 0)
+    const totalVolumeLAK  = nonWithdraw.reduce((s, r) => s + r.totalLAK, 0)
+    const totalVolumeSats = nonWithdraw.reduce((s, r) => s + r.totalSats, 0)
+    const totalWithdrawLAK  = withdrawRows.reduce((s, r) => s + r.totalLAK, 0)
+    const totalWithdrawSats = withdrawRows.reduce((s, r) => s + r.totalSats, 0)
 
     // ── ຄ່າໃຊ້ຈ່າຍ ──────────────────────────────────────────────────────
     const expenses = await Expense.find({
@@ -506,11 +504,14 @@ router.get('/report/profit', protect, adminOnly, async (req, res) => {
       data: {
         usdToLAKBase,
         totalProfitLAK,
+        totalProfitSats,
         totalVolumeLAK,
+        totalVolumeSats,
         totalWithdrawLAK,
-        totalExpenseLAK,   // ✅
-        netProfitLAK,      // ✅
-        expenses,          // ✅
+        totalWithdrawSats,
+        totalExpenseLAK,
+        netProfitLAK,
+        expenses,
         profitByDay:   profitDayResult,
         profitByMonth: profitMonthResult,
       }
@@ -560,40 +561,71 @@ router.get('/report/top-users', protect, staffOrAdmin, async (req, res) => {
         $match: {
           createdAt: { $gte: fromDate, $lte: toDate },
           status: 'success',
-          type: 'topup',
         }
       },
       {
         $group: {
-          _id:       '$user',
-          totalSats: { $sum: '$amountSats' },
-          totalLAK:  { $sum: '$amountLAK'  },
-          count:     { $sum: 1 },
+          _id:  { user: '$user', type: '$type' },
+          sats: { $sum: '$amountSats' },
+          lak:  { $sum: '$amountLAK'  },
+          fee:  { $sum: '$feeLAK'     },
+          cnt:  { $sum: 1 },
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.user',
+          types: {
+            $push: { type: '$_id.type', sats: '$sats', lak: '$lak', fee: '$fee', cnt: '$cnt' }
+          },
+          totalLAK: { $sum: '$lak' },
         }
       },
       { $sort: { totalLAK: -1 } },
       { $limit: parseInt(limit) },
       {
         $lookup: {
-          from:         'users',
-          localField:   '_id',
-          foreignField: '_id',
-          as:           'user',
+          from: 'users', localField: '_id', foreignField: '_id', as: 'user',
         }
       },
       { $unwind: '$user' },
       {
+        $lookup: {
+          from: 'wallets', localField: '_id', foreignField: 'user', as: 'wallet',
+        }
+      },
+      {
         $project: {
-          name:      '$user.name',
-          email:     '$user.email',
-          totalSats: 1,
-          totalLAK:  1,
-          count:     1,
+          name:  '$user.name',
+          email: '$user.email',
+          kycStatus: '$user.kycStatus',
+          balanceSats: { $ifNull: [{ $arrayElemAt: ['$wallet.balanceSats', 0] }, 0] },
+          balanceLAK:  { $ifNull: [{ $arrayElemAt: ['$wallet.balanceLAK', 0] }, 0] },
+          types: 1,
+          totalLAK: 1,
         }
       }
     ])
 
-    return res.json({ success: true, data: topUsers })
+    const result = topUsers.map(u => {
+      const byType = {}
+      u.types.forEach(t => { byType[t.type] = t })
+      return {
+        _id:  u._id,
+        name: u.name,
+        email: u.email,
+        kycStatus: u.kycStatus,
+        balanceSats: u.balanceSats,
+        balanceLAK:  u.balanceLAK,
+        topup:    byType.topup    || { cnt: 0, sats: 0, lak: 0 },
+        pay:      byType.pay      || { cnt: 0, sats: 0, lak: 0 },
+        laoQR:    byType.laoQR    || { cnt: 0, sats: 0, lak: 0 },
+        withdraw: byType.withdraw || { cnt: 0, sats: 0, lak: 0 },
+        totalLAK: u.totalLAK,
+      }
+    })
+
+    return res.json({ success: true, data: result })
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message })
   }
